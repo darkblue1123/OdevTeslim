@@ -13,26 +13,36 @@ namespace OdevTeslim.Repositories
         public async Task<IEnumerable<Submission>> GetSubmissionsByAssignmentIdAsync(int assignmentId)
         {
             return await _dbSet
-                .Include(s => s.Student) // Gönderen öğrenci bilgisini dahil et
+                .Include(s => s.Student) // Öğrenci bilgisini dahil et
                 .Where(s => s.AssignmentId == assignmentId)
+                .OrderByDescending(s => s.SubmissionDate) // En son teslimler üste gelsin
                 .ToListAsync();
         }
 
         public async Task<IEnumerable<Submission>> GetSubmissionsByStudentIdAsync(string studentId)
         {
             return await _dbSet
-                .Include(s => s.Assignment) // Ödev bilgisini dahil et
-                    .ThenInclude(a => a.Course) // Ödevden kurs bilgisini dahil et
-                .Where(s => s.StudentId == studentId)
-                .ToListAsync();
+               .Include(s => s.Assignment) // Ödev bilgisini dahil et
+               .Where(s => s.StudentId == studentId)
+               .OrderByDescending(s => s.SubmissionDate)
+               .ToListAsync();
         }
 
-        public async Task<Submission?> GetSubmissionWithStudentAndAssignmentAsync(int submissionId)
+        public async Task<Submission?> GetSubmissionWithDetailsAsync(int submissionId)
         {
             return await _dbSet
-               .Include(s => s.Student)
-               .Include(s => s.Assignment)
+               .Include(s => s.Student)     // Öğrenci
+               .Include(s => s.Assignment) // Ödev
+                   .ThenInclude(a => a.Course) // Ödevin Kursu
+                       .ThenInclude(c => c.Teacher) // Kursun Öğretmeni
+               .Include(s => s.GradedByTeacher) // Notu Veren Öğretmen
                .FirstOrDefaultAsync(s => s.Id == submissionId);
+        }
+
+        public async Task<Submission?> FindByStudentAndAssignmentAsync(string studentId, int assignmentId)
+        {
+            return await _dbSet
+                .FirstOrDefaultAsync(s => s.StudentId == studentId && s.AssignmentId == assignmentId);
         }
     }
 }

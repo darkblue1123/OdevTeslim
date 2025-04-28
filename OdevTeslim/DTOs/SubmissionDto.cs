@@ -1,4 +1,6 @@
-﻿namespace OdevTeslim.DTOs
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace OdevTeslim.DTOs
 {
     public class SubmissionDto:BaseDto
     {
@@ -14,4 +16,20 @@
         public string? GradedByTeacherName { get; set; }
 
     }
+
+
+    // Yeni teslim oluşturma (şimdilik sadece metin içerik)
+    public class SubmissionCreateDto
+    {
+        public string? Content { get; set; }
+        // Dosya yükleme için IFormFile kullanılır ve Controller'da farklı ele alınır.
+    }
+
+    // Not verme/Feedback için
+    public class SubmissionGradeDto
+    {
+        [Range(0, 100)] public int? Grade { get; set; }
+        public string? Feedback { get; set; }
+    }
+
 }

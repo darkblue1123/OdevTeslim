@@ -8,7 +8,7 @@ namespace OdevTeslim.Repositories
     {
         Task<IEnumerable<Submission>> GetSubmissionsByAssignmentIdAsync(int assignmentId);
         Task<IEnumerable<Submission>> GetSubmissionsByStudentIdAsync(string studentId);
-        Task<Submission?> GetSubmissionWithStudentAndAssignmentAsync(int submissionId);
-        // İhtiyaç duyacağın diğer özel metotlar...
+        Task<Submission?> GetSubmissionWithDetailsAsync(int submissionId); // Student, Assignment içerir
+        Task<Submission?> FindByStudentAndAssignmentAsync(string studentId, int assignmentId); // Öğrencinin ödeve teslim yapıp yapmadığını kontrol etmek için
     }
 }

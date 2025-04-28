@@ -1,4 +1,6 @@
-﻿namespace OdevTeslim.DTOs
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace OdevTeslim.DTOs
 {
     public class EnrollmentDto : BaseDto
     {
@@ -11,4 +13,10 @@
         public string? StudentLastName { get; set; }
 
     }
+    public class EnrollmentCreateDto
+    {
+        [Required(ErrorMessage = "Öğrenci ID'si gereklidir.")]
+        public string StudentId { get; set; } = string.Empty;
+    }
+
 }
