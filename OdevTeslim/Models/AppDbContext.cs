@@ -21,18 +21,9 @@ namespace OdevTeslim.Models
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
-            base.OnModelCreating(builder); // Identity konfigürasyonu için gerekli
+            base.OnModelCreating(builder); 
 
-            // BaseEntity'den türeyen varlıkların PK'sı zaten 'Id' olarak tanımlı.
-            // EF Core bunu genellikle anlar, ancak açıkça belirtmek isterseniz:
-            // builder.Entity<Course>().HasKey(c => c.Id);
-            // builder.Entity<Assignment>().HasKey(a => a.Id);
-            // ... vb.
 
-            // Enrollment için NOT: Eğer BaseEntity kullanıyorsak ve Id PK ise,
-            // StudentId ve CourseId'nin birlikte unique olmasını sağlamak isteyebiliriz.
-            // Eğer composite key tercih edilseydi (BaseEntity'den türetmeden), HasKey farklı olurdu.
-            // Şimdiki yapıda (BaseEntity ile), unique constraint ekleyebiliriz:
             builder.Entity<CourseEnrollment>()
                 .HasIndex(e => new { e.StudentId, e.CourseId }) // StudentId ve CourseId kombinasyonu unique olsun
                 .IsUnique();

@@ -1,0 +1,161 @@
+﻿@* Views/Admin/UserList.cshtml *@
+@{
+    Layout = "_AdminLayout";
+
+    ViewData["Title"] = "Kullanıcı Listesi";
+}
+
+<div class="row">
+    <div class="col-md-12" id="divUserList">
+        @* Tam genişlik kullanalım şimdilik *@
+        <div class="card">
+            <div class="card-header">
+                <h3>Kullanıcılar</h3>
+            </div>
+            <div class="card-body">
+                <table class="table table-striped table-hover" id="tbUserList">
+                    <thead>
+                        <tr>
+                            <th>Kullanıcı Adı</th>
+                            <th>E-posta</th>
+                            <th>Adı</th>
+                            <th>Soyadı</th>
+                            <th>Roller</th>
+                            <th>E-posta Onayı</th> @* Örnek ek alan *@
+                            <th>İşlemler</th> @* Şimdilik boş veya basit işlemler *@
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @* AJAX ile doldurulacak *@
+                    </tbody>
+                </table>
+            </div>
+            <div class="card-footer">
+                @* Buraya kullanıcı ekleme butonu gibi şeyler eklenebilir (Admin için) *@
+                @* <button class="btn btn-success" id="btnAddNewUser">Yeni Kullanıcı Ekle</button> *@
+            </div>
+        </div>
+    </div>
+    @* Kullanıcı ekleme/güncelleme formu şimdilik gizli veya ayrı bir sayfada olabilir.
+       Verdiğiniz örnekteki gibi bir yapı istenirse eklenebilir ama kullanıcı yönetimi daha karmaşıktır.
+    <div class="col-md-4" id="divAddUpdateUser" style="display:none;">
+        <div class="card">
+            <div class="card-header"><h4>Kullanıcı Ekle/Güncelle</h4></div>
+            <div class="card-body">
+                // Form elemanları buraya
+            </div>
+        </div>
+    </div>
+    *@
+</div>
+
+@section Scripts {
+    <script>
+        // Sayfa yüklendiğinde bu script çalışacak
+        $(document).ready(function () {
+            // API'nin temel adresini ViewBag'den al
+            var apiBaseUrl = "@ViewBag.ApiBaseURL";
+            // Oturum açmış kullanıcının rollerini ViewBag'den al ve JavaScript dizisine çevir
+            var userRoles = [];
+            try {
+                userRoles = JSON.parse('@Html.Raw(ViewBag.UserRolesJson)');
+            } catch (e) {
+                console.error("Kullanıcı rolleri parse edilemedi:", e);
+            }
+
+            // localStorage'dan JWT token'ını al
+            var token = localStorage.getItem("token");
+
+            // Eğer token yoksa veya boşsa, login sayfasına yönlendir
+            if (!token) { // Daha kısa kontrol
+                location.href = "/Account/Login"; // MVC Login sayfanızın adresi
+                return; // Fonksiyonun devam etmesini engelle
+            }
+
+            // Kullanıcı listesini API'den çek ve tabloya doldur
+            GetUserList();
+
+            // Kullanıcı listesini getiren fonksiyon
+            function GetUserList() {
+                $.ajax({
+                    url: apiBaseUrl + "/api/account/users", // API'deki kullanıcı listeleme endpoint'i
+                    type: "GET",
+                    headers: {
+                        "Authorization": "Bearer " + token // Token'ı Authorization header'ına ekle
+                    },
+                    success: function (data) {
+                        // Gelen kullanıcı verilerini tabloya yerleştir
+                        UsersToTable(data);
+                    },
+                    error: function (jqXHR, textStatus, errorThrown) {
+                        // Hata durumunda kullanıcıya bilgi ver
+                        console.error("Kullanıcı listesi alınırken hata oluştu:", textStatus, errorThrown);
+                        if(jqXHR.status === 401 || jqXHR.status === 403) { // Yetkisiz veya yasaklanmış
+                            $("#tbUserList tbody").html('<tr><td colspan="7" class="text-danger">Kullanıcıları listeleme yetkiniz bulunmamaktadır veya oturumunuz sonlanmıştır. Lütfen tekrar giriş yapın.</td></tr>');
+                            // location.href = "/Account/Login"; // Otomatik yönlendirme
+                        } else {
+                            $("#tbUserList tbody").html('<tr><td colspan="7" class="text-danger">Kullanıcı listesi yüklenirken bir sorun oluştu.</td></tr>');
+                        }
+                    }
+                });
+            }
+
+            // Kullanıcı verilerini HTML tablosuna dönüştüren fonksiyon
+            function UsersToTable(usersData) {
+                $("#tbUserList tbody").empty(); // Tablonun mevcut içeriğini temizle
+                var rows = ""; // Tablo satırlarını biriktireceğimiz değişken
+
+                if (!usersData || usersData.length === 0) {
+                    rows = '<tr><td colspan="7" class="text-center">Gösterilecek kullanıcı bulunamadı.</td></tr>';
+                } else {
+                    $.each(usersData, function (index, user) {
+                        var rolesString = user.roles ? user.roles.join(', ') : 'Rol Yok';
+                        var emailConfirmedStatus = user.emailConfirmed ? '<span class="badge bg-success text-white">Onaylı</span>' : '<span class="badge bg-warning text-dark">Onaysız</span>';
+                        // AppUser modelinde isActive gibi bir alanınız varsa kullanabilirsiniz.
+                        // Şimdilik EmailConfirmed'ı durum olarak gösteriyoruz.
+
+                        rows += "<tr>";
+                        rows += "<td>" + (user.userName || 'N/A') + "</td>";
+                        rows += "<td>" + (user.email || 'N/A') + "</td>";
+                        rows += "<td>" + (user.firstName || '') + "</td>";
+                        rows += "<td>" + (user.lastName || '') + "</td>";
+                        rows += "<td>" + rolesString + "</td>";
+                        rows += "<td>" + emailConfirmedStatus + "</td>";
+                        rows += '<td>';
+                        // Admin ise düzenleme/rol atama butonları eklenebilir.
+                        // Şimdilik basit tutuyoruz.
+                        if (userRoles.includes("Admin")) {
+                            rows += '<button class="btn btn-sm btn-info btnViewDetails" data-id="' + user.id + '" title="Detaylar"><i class="fa fa-eye"></i></button> ';
+                            rows += '<button class="btn btn-sm btn-warning btnEditUserRoles" data-id="' + user.id + '" title="Rolleri Düzenle"><i class="fa fa-users-cog"></i></button>';
+                        }
+                        rows += '</td>';
+                        rows += "</tr>";
+                    });
+                }
+                $("#tbUserList tbody").append(rows);
+
+                // Örnek: Admin olmayan kullanıcılar için bazı işlemleri gizleme
+                // Bu kısım sizin "userRoles" değişkeninizin nasıl ayarlandığına bağlı.
+                // if (!userRoles.includes("Admin")) {
+                //    // Örneğin kullanıcı ekleme/güncelleme/silme butonlarını gizle
+                //    // $("#btnAddNewUser").hide();
+                //    // $(".btnEditUserRoles").hide();
+                // }
+            }
+
+            // Örnek: Tarih formatlama fonksiyonu (Eğer UserDto'da tarih alanı olsaydı)
+            // function FormatDate(dateString) {
+            //    if (!dateString) return "";
+            //    var date = new Date(dateString);
+            //    return ('0' + date.getDate()).slice(-2) + '/'
+            //         + ('0' + (date.getMonth()+1)).slice(-2) + '/'
+            //         + date.getFullYear() + ' '
+            //         + ('0' + date.getHours()).slice(-2) + ':'
+            //         + ('0' + date.getMinutes()).slice(-2);
+            // }
+
+            // Buraya kullanıcı ekleme, güncelleme, silme ve rol atama için AJAX fonksiyonları eklenebilir.
+            // Şimdilik sadece listeleme üzerinde durduk.
+        });
+    </script>
+}

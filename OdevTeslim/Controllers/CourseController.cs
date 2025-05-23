@@ -49,13 +49,15 @@ namespace OdevTeslim.Controllers
             {
                 // Öğretmen ismini almak için ek sorgu veya Repository'de Include gerekli
                 // Şimdilik TeacherId'yi döndürelim. İsim eklemek isterseniz repository metodunu güncellemelisiniz.
+                var teacher = await _context.Users.FindAsync(course.TeacherId); // Öğretmeni ID ile bul
+
                 courseDtos.Add(new CourseDto
                 {
                     Id = course.Id,
                     Name = course.Name,
                     Description = course.Description,
-                    TeacherId = course.TeacherId
-                    // TeacherFullName = (await _userManager.FindByIdAsync(course.TeacherId))?.FullName // Performans sorunları yaratabilir!
+                    TeacherId = course.TeacherId,
+                    TeacherName = teacher?.UserName // Öğretmen bulunduysa adını ata, bulunamadıysa null kalır
                 });
             }
             return Ok(courseDtos);

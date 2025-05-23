@@ -38,6 +38,7 @@ namespace Uyg.API.Controllers
             var userDtos = _mapper.Map<List<UserDto>>(users);
             return userDtos;
         }
+     
         [HttpGet("id")]
         public UserDto GetById(string id)
         {

@@ -15,6 +15,12 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 
 builder.Services.AddControllers();
+builder.Services.AddCors(p => p.AddPolicy("corspolicy", opt =>
+{
+    opt.WithOrigins("*").AllowAnyMethod().AllowAnyHeader();
+}));
+
+
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
@@ -103,6 +109,7 @@ builder.Services.AddAuthentication(options =>
 });
 builder.Services.AddAuthorization();
 
+
 var app = builder.Build();
 
 
@@ -183,9 +190,13 @@ if (app.Environment.IsDevelopment())
 var sqlCon = builder.Configuration.GetConnectionString("DefaultConnection");
 
 app.UseHttpsRedirection();
+app.UseRouting(); // 1. Routing middleware'i (Endpoint'leri belirlemek için)
 
+app.UseCors("corspolicy"); // 2. TANIMLADIĞINIZ CORS POLİTİKASINI UYGULAYIN!
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapControllers(); // 5. Controller endpoint'lerini eşle
+
 
 app.Run();

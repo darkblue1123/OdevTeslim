@@ -1,0 +1,161 @@
+﻿@* Views/Courses/Index.cshtml *@
+@{
+    ViewData["Title"] = "Dersler";
+}
+
+<div class="row">
+    <div class="col-md-12" id="divCourseList">
+        <div class="card">
+            <div class="card-header">
+                <h3>Kurs Listesi</h3>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover" id="tbCourseList">
+                        <thead>
+                            <tr>
+                                <th>Kurs Adı</th>
+                                <th>Açıklama</th>
+                                <th>Öğretmen</th>
+                                <th>İşlemler</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @* AJAX ile doldurulacak *@
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="card-footer">
+                @* Admin veya Öğretmen ise Yeni Ders Ekle butonu gösterilebilir *@
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function () {
+            var apiBaseUrl = "@ViewBag.ApiBaseURL";
+                    // Index.cshtml içindeki <script> bloğu
+        var userRoles = []; // Varsayılan olarak boş bir dizi ata
+        var rawUserRolesJson = '@Html.Raw(ViewBag.UserRolesJson)';
+
+        if (rawUserRolesJson && rawUserRolesJson.trim() !== "") {
+            try {
+                userRoles = JSON.parse(rawUserRolesJson);
+            } catch (e) {
+                console.error("Kullanıcı rolleri parse edilemedi:", e, "Gelen Ham JSON:", rawUserRolesJson);
+                // Hata durumunda userRoles boş bir dizi olarak kalır, bu genellikle sorun yaratmaz.
+            }
+        } else {
+            console.warn("ViewBag.UserRolesJson boş veya null geldi, roller yüklenemedi.");
+        }
+            var token = localStorage.getItem("token");
+
+            if (!token) {
+                location.href = "/Login"; // MVC Login sayfanızın adresi
+                return;
+            }
+
+            GetCourseList();
+
+            function GetCourseList() {
+                $.ajax({
+                    url: apiBaseUrl + "/courses", // API'deki tüm dersleri listeleme endpoint'i
+                    type: "GET",
+                    headers: {
+                        "Authorization": "Bearer " + token
+                    },
+                    success: function (coursesData) {
+                        CoursesToTable(coursesData);
+                    },
+                    error: function (jqXHR, textStatus, errorThrown) {
+                        console.error("Ders listesi alınırken hata oluştu:", textStatus, errorThrown);
+                         if(jqXHR.status === 401 || jqXHR.status === 403) {
+                            // Colspan değeri güncellendi (4 sütun + işlemler = 5 yerine 3 sütun + işlemler = 4)
+                            $("#tbCourseList tbody").html('<tr><td colspan="4" class="text-danger">Dersleri listeleme yetkiniz bulunmamaktadır veya oturumunuz sonlanmıştır. Lütfen tekrar giriş yapın.</td></tr>');
+                        } else {
+                            $("#tbCourseList tbody").html('<tr><td colspan="4" class="text-danger">Ders listesi yüklenirken bir sorun oluştu.</td></tr>');
+                        }
+                    }
+                });
+            }
+
+            function CoursesToTable(coursesData) {
+                $("#tbCourseList tbody").empty();
+                var rows = "";
+
+                if (!coursesData || coursesData.length === 0) {
+                    // Colspan değeri güncellendi
+                    rows = '<tr><td colspan="4" class="text-center">Gösterilecek ders bulunamadı.</td></tr>';
+                } else {
+                    $.each(coursesData, function (index, course) {
+                        rows += "<tr>";
+                        rows += "<td>" + (course.name || 'N/A') + "</td>";
+                        rows += "<td>" + (course.description || '') + "</td>";
+                        rows += "<td>" + (course.teacherName || 'Belirtilmemiş') + "</td>"; // DTO'da TeacherName olduğunu varsayıyoruz
+                        // rows += "<td>" + FormatDate(course.createdDate) + "</td>"; // Bu satır kaldırıldı
+                        rows += '<td>';
+                        rows += '<a class="btn btn-sm btn-info" href="/Courses/' + course.id + '/Assignments" title="Ödevleri Gör"><i class="fa fa-tasks"></i></a> '; // MVC route'u güncellendi
+        rows += '<a class="btn btn-sm btn-primary btnViewStudents" href="/Courses/Details/' + course.id + '" title="Kayıtlı Öğrencileri Gör"><i class="fa fa-users"></i></a> ';
+
+                        // Admin ve Öğretmen için düzenleme/silme butonları (daha detaylı yetki kontrolü gerekebilir)
+                        if (userRoles.includes("Admin") || (userRoles.includes("Teacher") && course.teacherId === GetCurrentUserIdFromToken())) {
+                                    rows += '<td>';
+        // Diğer butonlarınızın yanına veya yerine:
+       
+
+                             rows += '<button class="btn btn-sm btn-warning btnEditCourse" data-id="' + course.id + '" title="Dersi Düzenle"><i class="fa fa-edit"></i></button> ';
+                             rows += '<button class="btn btn-sm btn-danger btnDeleteCourse" data-id="' + course.id + '" title="Dersi Sil"><i class="fa fa-trash"></i></button> ';
+                        }
+                         if (userRoles.includes("Student")) {
+                            // Derse kayıt olma/ayrılma butonları için daha karmaşık bir mantık gerekir.
+                            // Şimdilik sadece bir örnek olarak bırakıyorum.
+                            // rows += '<button class="btn btn-sm btn-success btnEnroll" data-courseid="' + course.id + '">Kaydol</button>';
+                        }
+                        rows += '</td>';
+                        rows += "</tr>";
+                    });
+                }
+                $("#tbCourseList tbody").append(rows);
+            }
+
+            // Bu fonksiyon JWT token'dan kullanıcı ID'sini parse etmeye çalışır.
+            // Gerçek uygulamada daha sağlam bir yöntem kullanmanız gerekebilir.
+            function GetCurrentUserIdFromToken() {
+                if (!token) return null;
+                try {
+                    var payload = JSON.parse(atob(token.split('.')[1]));
+                    // Token'da kullanıcı ID'sinin hangi claim altında olduğuna bağlı (sub, nameid, uid vb.)
+                    return payload.sub || payload.nameid || payload.uid;
+                } catch (e) {
+                    console.error("Token parse error:", e);
+                    return null;
+                }
+            }
+
+
+            // FormatDate fonksiyonu artık gerekli değil, ama referans olarak kalabilir veya silinebilir.
+            // function FormatDate(dateString) { ... }
+
+
+            // Ders Düzenleme ve Silme için AJAX çağrıları buraya eklenecek
+            // Örnek:
+            /*$(document).on("click", ".btnEditCourse", function(){
+                var courseId = $(this).data("id");
+                // Düzenleme formunu yükle veya modal aç, API'den ders detayını çek vb.
+            /   console.log("Edit course: " + courseId);
+             });*/
+
+            // $(document).on("click", ".btnDeleteCourse", function(){
+            //    var courseId = $(this).data("id");
+            //    if(confirm(courseId + " ID'li dersi silmek istediğinize emin misiniz?")){
+            //        // API'ye DELETE isteği gönder
+            //        // Başarılı olursa GetCourseList() çağır
+            //        console.log("Delete course: " + courseId);
+            //    }
+            // });
+        });
+    </script>
+}
