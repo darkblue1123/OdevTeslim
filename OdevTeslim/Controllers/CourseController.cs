@@ -9,19 +9,21 @@ using OdevTeslim.Repositories; // ICourseRepository için
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Http;
 using System.Security.Claims; // Kullanıcı ID'sini almak için
 using System.Threading.Tasks;
 
 namespace OdevTeslim.Controllers
 {
+    // API Projesi - CoursesController.cs
     [Route("api/[controller]")]
     [ApiController]
-    [Authorize] // Bu controller'a erişim için genel olarak giriş yapmış olmak gerekir
-    public class CoursesController : ControllerBase
+    [Authorize]
+    public class CoursesController : ControllerBase // ControllerBase'den miras alır
     {
         private readonly ICourseRepository _courseRepository;
-        private readonly AppDbContext _context; // SaveChangesAsync için
-        private readonly UserManager<AppUser> _userManager; // Öğretmen ID'sini almak/kontrol etmek için
+        private readonly AppDbContext _context;
+        private readonly UserManager<AppUser> _userManager;
 
         public CoursesController(
             ICourseRepository courseRepository,
@@ -32,6 +34,10 @@ namespace OdevTeslim.Controllers
             _context = context;
             _userManager = userManager;
         }
+
+        // Mevcut GET api/courses ve GET api/courses/{id} metotlarınız doğru.
+        // POST, PUT, DELETE metotlarınız da API konseptine uygun.
+        // ... (GetCourses, GetCourse, CreateCourse, UpdateCourse, DeleteCourse metotlarınız burada kalacak) ...
 
         // GET: api/courses
         /// <summary>
@@ -253,6 +259,117 @@ namespace OdevTeslim.Controllers
 
             // Başarılı silme sonrası mesaj döndür
             return Ok(new ResultDto { Status = true, Message = "Kurs başarıyla silindi." });
+
         }
+
+
+        [HttpGet("{courseId}/details-and-students")] // Yeni endpoint rotası
+        [Authorize(Roles = "Admin,Teacher,Student")] // Yetkilendirmeyi uygun şekilde ayarlayın
+        public async Task<IActionResult> GetCourseDetailsAndStudents(int courseId)
+        {
+            // 1. Kurs Bilgilerini Çek
+            // Repository'nizdeki GetCourseWithTeacherAsync metodu öğretmen bilgisini de getiriyordu.
+            var courseEntity = await _courseRepository.GetCourseWithTeacherAsync(courseId);
+            if (courseEntity == null)
+            {
+                return NotFound(new { success = false, message = $"Kurs (ID: {courseId}) bulunamadı." });
+            }
+
+            // Kurs bilgilerini anonim bir nesneye veya sunucu tarafı bir DTO'ya map'leyin
+            var courseData = new
+            {
+                id = courseEntity.Id,
+                name = courseEntity.Name,
+                description = courseEntity.Description,
+                teacherName = courseEntity.Teacher != null ? $"{courseEntity.Teacher.FirstName} {courseEntity.Teacher.LastName}" : "Belirtilmemiş",
+                teacherId = courseEntity.TeacherId 
+            };
+
+
+            // 2. Kayıtlı Öğrencileri Çek
+            // Bu kısım, API controller'ınıza daha önce eklediğimiz GetEnrolledStudents metodundaki mantığa benzer olacak.
+            var studentEntities = await _context.Enrollments
+                .Where(ce => ce.CourseId == courseId)
+                .Include(ce => ce.Student) // Student (AppUser) bilgilerini de çek
+                .Select(ce => ce.Student)
+                .ToListAsync();
+
+            // Öğrenci bilgilerini anonim nesnelere veya sunucu tarafı DTO'lara map'leyin
+            var studentsData = studentEntities.Select(s => new
+            {
+                id = s.Id,
+                fullName = $"{s.FirstName} {s.LastName}", // AppUser modelinizdeki alanlara göre
+                email = s.Email
+                // İhtiyaç duyduğunuz diğer öğrenci alanları
+            }).ToList();
+
+            // 3. Tüm veriyi tek bir nesnede birleştirip döndür
+            var result = new
+            {
+                success = true,
+                courseInfo = courseData,
+                enrolledStudents = studentsData
+            };
+
+            return Ok(result);
+        }
+
+        [HttpGet("{courseId}/assignments-with-details")]
+        [Authorize(Roles = "Admin,Teacher,Student")]
+        public async Task<IActionResult> GetCourseAssignmentsWithDetails(int courseId)
+        {
+            // 1. Kurs Temel Bilgilerini Çek
+            // Course entity'nizin TeacherId alanını içerdiğinden emin olun.
+            // Eğer TeacherId bir navigation property ise ve yüklenmiyorsa, Include etmeniz gerekebilir
+            // ya da Course entity'nizde doğrudan bir TeacherId foreign key alanı olmalıdır.
+            var courseEntity = await _context.Courses // Veya _courseRepository.GetByIdAsync(courseId);
+                                                      // Eğer _courseRepository.GetByIdAsync(courseId) TeacherId'yi getirmiyorsa
+                                                      // ve TeacherId, Course entity'sinde direkt bir property ise, _context üzerinden çekmek
+                                                      // veya repository metodunu güncellemek daha iyi olabilir.
+                                                      // Örneğin, eğer Course entity'sinde public string TeacherId { get; set; } varsa:
+                .AsNoTracking() // Sadece okuma yapıyorsak performansı artırır
+                .FirstOrDefaultAsync(c => c.Id == courseId);
+
+            if (courseEntity == null)
+            {
+                return NotFound(new { success = false, message = $"Kurs (ID: {courseId}) bulunamadı." });
+            }
+
+            // courseData oluşturulurken teacherId'nin eklendiğinden emin olun
+            var courseData = new
+            {
+                id = courseEntity.Id,
+                name = courseEntity.Name,
+                teacherId = courseEntity.TeacherId // <-- BU ÇOK ÖNEMLİ! courseEntity.TeacherId dolu olmalı.
+            };
+
+            // 2. Kursa Atanmış Ödevleri Çek
+            var mappedAssignments = await _context.Assignments
+                .Where(a => a.CourseId == courseId)
+                .OrderBy(a => a.DueDate)
+                .Select(a => new
+                {
+                    id = a.Id,
+                    title = a.Title,
+                    description = a.Description,
+                    dueDate = a.DueDate,
+                    createdDate = a.CreatedDate
+                })
+                .ToListAsync();
+
+            var result = new
+            {
+                success = true,
+                courseInfo = courseData,
+                // DÜZELTİLMİŞ SATIR:
+                assignments = mappedAssignments // ToListAsync() zaten null olmayan bir liste döndürür (boş olabilir)
+            };
+
+
+
+            return Ok(result);
+        }
+
+
     }
 }

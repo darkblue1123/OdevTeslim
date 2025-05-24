@@ -1,0 +1,195 @@
+﻿@* MVC Projesi - Views/Courses/Assignments.cshtml *@
+@{
+    ViewData["Title"] = "Kurs Ödevleri";
+    Layout = "_AdminLayout";
+
+}
+
+<div class="container mt-4">
+    <div id="assignmentsPageCard" class="card" style="display: none;">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h2 id="courseNameForAssignments" class="mb-0"></h2>
+            @* YENİ ÖDEV EKLE BUTONU BURADA (Başlangıçta gizli) *@
+            <a href="#" id="btnAddCourseAssignment" class="btn btn-success" style="display: none;" title="Bu Kursa Yeni Ödev Ekle">
+                <i class="fa fa-plus"></i> Yeni Ödev Ekle
+            </a>
+        </div>
+        <div class="card-body">
+            <h5 class="card-title">Bu Kursa Atanmış Ödevler</h5>
+
+            <div id="assignmentListContainer" class="mt-3" style="display: none;">
+                @* Ödevler buraya JavaScript ile eklenecek *@
+            </div>
+
+            <p id="noAssignmentsMessage" style="display: none;">Bu kursa atanmış ödev bulunmamaktadır.</p>
+            <p id="assignmentsLoadingMessage">Ödev listesi yükleniyor...</p>
+        </div>
+        <div class="card-footer">
+            <a asp-action="Index" asp-controller="Courses" class="btn btn-outline-secondary">Kurs Listesine Geri Dön</a>
+            <a id="backToCourseDetails" href="#" class="btn btn-outline-info">Kurs Detaylarına Geri Dön</a>
+        </div>
+    </div>
+    <div id="courseDataLoadingErrorMessage" class="alert alert-danger" style="display: none;">
+        Kurs veya ödev bilgileri yüklenirken bir hata oluştu. Lütfen daha sonra tekrar deneyin.
+    </div>
+    <div id="courseDataNotFoundMessage" class="alert alert-warning" style="display: none;">
+        Kurs bilgileri bulunamadı veya bu kursa ait ödevlere erişim yetkiniz yok.
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // Bu fonksiyon JWT token'dan kullanıcı ID'sini parse etmeye çalışır.
+        function GetCurrentUserIdFromToken() {
+            var token = localStorage.getItem("token");
+            if (!token) return null;
+            try {
+                var payload = JSON.parse(atob(token.split('.')[1]));
+                return payload.nameid || payload.sub || payload.unique_name; // Token'ınızdaki ID claim'i
+            } catch (e) {
+                console.error("Token parse error for User ID:", e);
+                return null;
+            }
+        }
+
+        // Bu fonksiyon JWT token'dan kullanıcı rollerini parse eder.
+        function GetCurrentUserRolesFromToken() {
+            var token = localStorage.getItem("token");
+            if (!token) return [];
+            try {
+                var payload = JSON.parse(atob(token.split('.')[1]));
+                var rolesClaim = payload.role || payload.roles || payload['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'];
+                if (rolesClaim) {
+                    return Array.isArray(rolesClaim) ? rolesClaim : [rolesClaim.toString()];
+                }
+                return [];
+            } catch (e) {
+                console.error("Token parse error for User Roles:", e);
+                return [];
+            }
+        }
+
+        $(document).ready(function () {
+            var courseId = @ViewBag.CourseId;
+            var apiBaseUrl = "@Html.Raw(ViewBag.ApiBaseUrl)";
+            var token = localStorage.getItem("token");
+
+            // Kurs Detaylarına Geri Dön linkini ayarla
+            $("#backToCourseDetails").attr("href", `/Courses/Details/${courseId}`);
+
+            // ViewBag'den rol alma kısmı yok, roller token'dan alınacak.
+            var userRoles = GetCurrentUserRolesFromToken();
+            console.log("Token'dan alınan roller (Assignments.cshtml):", userRoles);
+
+            if (!courseId || !apiBaseUrl) {
+                console.error("Kurs ID veya API adresi ViewBag'den alınamadı.");
+                $("#courseDataLoadingErrorMessage").text("Sayfa yüklenirken bir sorun oluştu (ID/API URL eksik).").show();
+                $("#assignmentsLoadingMessage").hide();
+                return;
+            }
+
+            // Token kontrolü
+            if (!token) {
+                console.warn("Token bulunamadı. API isteği yetkilendirme hatası alabilir.");
+                // İsterseniz burada login sayfasına yönlendirme yapabilirsiniz:
+                // location.href = "/Login"; // MVC Login sayfanızın adresi
+                // return;
+            }
+
+            $.ajax({
+                url: `${apiBaseUrl}/courses/${courseId}/assignments-with-details`, // API endpoint'i
+                type: "GET",
+                headers: {
+                    "Authorization": "Bearer " + token
+                },
+                success: function (response) {
+                    $("#assignmentsLoadingMessage").hide();
+                    if (response.success) {
+                        var courseInfo = response.courseInfo;
+                        var assignments = response.assignments;
+
+                        $("#courseNameForAssignments").text(`Kurs: ${courseInfo.name || "N/A"} - Ödevler`);
+
+                        // ----- YENİ ÖDEV EKLE BUTONUNUN GÖRÜNÜRLÜĞÜ -----
+                        var currentUserId = GetCurrentUserIdFromToken();
+
+                        // API'den courseInfo.teacherId geldiğinden emin olalım
+                        if (courseInfo && courseInfo.teacherId !== undefined) {
+                            if (userRoles.includes("Admin") || (userRoles.includes("Teacher") && courseInfo.teacherId.toString() === currentUserId)) {
+                                // Ödev ekleme sayfanızın URL'ini buraya doğru şekilde girin
+                                // Bu URL, yeni bir ödev oluşturma formunu gösteren MVC action'ına gitmeli
+                                // ve courseId'yi parametre olarak almalı.
+                                var addAssignmentUrl = `/Assignments/Create?courseId=${courseId}`;
+                                $("#btnAddCourseAssignment").attr("href", addAssignmentUrl).show();
+                                console.log("Yeni Ödev Ekle butonu gösteriliyor.");
+                            } else {
+                                $("#btnAddCourseAssignment").hide();
+                                console.log("Yeni Ödev Ekle butonu gizlendi. Yetki yetersiz.");
+                            }
+                        } else {
+                            $("#btnAddCourseAssignment").hide();
+                            console.warn("courseInfo.teacherId API'den gelmedi veya tanımsız, Yeni Ödev Ekle butonu için öğretmen yetki kontrolü yapılamadı.");
+                        }
+                        // ----- BUTON GÖRÜNÜRLÜĞÜ SONU -----
+
+
+                        var $assignmentListContainer = $("#assignmentListContainer");
+                        $assignmentListContainer.empty();
+
+                        if (assignments && assignments.length > 0) {
+                            var assignmentHtml = '<ul class="list-group">';
+                            $.each(assignments, function (index, assignment) {
+                                var dueDateText = 'Belirtilmemiş';
+                                if(assignment.dueDate) {
+                                    try {
+                                        dueDateText = new Date(assignment.dueDate).toLocaleDateString('tr-TR', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                                    } catch(e) { console.error("Due date format error", e); }
+                                }
+
+                                var createdDateText = 'N/A';
+                                if(assignment.createdDate) {
+                                    try {
+                                        createdDateText = new Date(assignment.createdDate).toLocaleDateString('tr-TR');
+                                    } catch(e) { console.error("Created date format error", e); }
+                                }
+
+                                assignmentHtml += `
+                                    <li class="list-group-item">
+                                        <h5>${assignment.title || "Başlıksız Ödev"} (ID: ${assignment.id})</h5>
+                                        <p>${assignment.description || "Açıklama yok."}</p>
+                                        <small class="text-muted">Oluşturulma: ${createdDateText} | Son Teslim: <strong>${dueDateText}</strong></small>
+                                        <div>
+        @* Ödev detayları, teslim etme, düzenleme vb. linkler buraya eklenebilir. *@
+        @* Örn: <a href="/Assignments/Submissions/${assignment.id}?courseId=${courseId}" class="btn btn-sm btn-outline-info mt-2">Teslimleri Gör</a> *@
+        @* VEYA: <a href="/Assignments/Edit/${assignment.id}" class="btn btn-sm btn-outline-warning mt-2">Düzenle</a> (Yetkiye bağlı) *@
+                                        </div>
+                                    </li>`;
+                            });
+                            assignmentHtml += '</ul>';
+                            $assignmentListContainer.html(assignmentHtml).show();
+                            $("#noAssignmentsMessage").hide();
+                        } else {
+                            $("#noAssignmentsMessage").show();
+                            $assignmentListContainer.hide();
+                        }
+                        $("#assignmentsPageCard").show();
+                    } else {
+                        $("#courseDataNotFoundMessage").text(response.message || "Kurs veya ödev verisi alınamadı.").show();
+                    }
+                },
+                error: function (jqXHR, textStatus, errorThrown) {
+                    $("#assignmentsLoadingMessage").hide();
+                    console.error("API isteği başarısız oldu (Ödevler): ", textStatus, errorThrown, jqXHR.responseText);
+                    if (jqXHR.status === 404) {
+                        $("#courseDataNotFoundMessage").text("Kurs bulunamadı veya bu kursa ait ödev endpoint'i yok.").show();
+                    } else if (jqXHR.status === 401 || jqXHR.status === 403) {
+                         $("#courseDataNotFoundMessage").text("Bu bilgilere erişim yetkiniz bulunmamaktadır. Lütfen giriş yapın veya yetkilerinizi kontrol edin.").show();
+                    }
+                    else {
+                        $("#courseDataLoadingErrorMessage").show();
+                    }
+                }
+            });
+        });
+    </script>
+}

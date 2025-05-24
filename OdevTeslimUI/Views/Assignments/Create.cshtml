@@ -1,0 +1,106 @@
+﻿@* MVC Projesi - Views/Assignments/Create.cshtml *@
+@{
+    ViewData["Title"] = "Yeni Ödev Ekle";
+    Layout = "_AdminLayout";
+
+    var courseId = ViewBag.CourseId; // Controller'dan gelen CourseId
+}
+
+<div class="container mt-4">
+    <h3>Kurs ID: @courseId için Yeni Ödev Ekle</h3>
+    <hr />
+
+    <form id="createAssignmentForm">
+        @* Kurs ID'sini gizli bir alanda tutmak, JavaScript'in kolayca erişmesi için iyi olabilir *@
+        <input type="hidden" id="courseId" name="courseId" value="@courseId" />
+
+        <div class="form-group mb-3">
+            <label for="title" class="form-label">Ödev Başlığı:</label>
+            <input type="text" id="title" name="title" class="form-control" required />
+            <div class="invalid-feedback">Başlık boş bırakılamaz.</div>
+        </div>
+
+        <div class="form-group mb-3">
+            <label for="description" class="form-label">Açıklama (Opsiyonel):</label>
+            <textarea id="description" name="description" class="form-control" rows="3"></textarea>
+        </div>
+
+        <div class="form-group mb-3">
+            <label for="dueDate" class="form-label">Son Teslim Tarihi:</label>
+            <input type="datetime-local" id="dueDate" name="dueDate" class="form-control" required />
+            <div class="invalid-feedback">Son teslim tarihi boş bırakılamaz.</div>
+        </div>
+
+        <button type="submit" class="btn btn-primary">Ödevi Kaydet</button>
+        <a href="@Url.Action("Assignments", "Courses", new { id = courseId })" class="btn btn-secondary">İptal Et ve Geri Dön</a>
+    </form>
+
+    <div id="formAlert" class="alert mt-3" style="display: none;"></div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function () {
+            var apiBaseUrl = "@Html.Raw(ViewBag.ApiBaseUrl)";
+            var token = localStorage.getItem("token");
+            var currentCourseId = $("#courseId").val(); // Gizli input'tan kurs ID'sini al
+
+               $("#createAssignmentForm").on("submit", function (event) {
+        event.preventDefault();
+        // ... (form verilerini alma ve validation) ...
+
+        var assignmentData = { // Bu nesne API'deki AssignmentCreateDto ile eşleşmeli
+            title: $("#title").val().trim(),
+            description: $("#description").val().trim(),
+            dueDate: $("#dueDate").val()
+        };
+
+        $.ajax({
+            // URL, API'deki AssignmentsController'ın route'u ve HttpPost action'ı ile eşleşiyor:
+            url: `${apiBaseUrl}/courses/${currentCourseId}/assignments`,
+            type: "POST",
+            contentType: "application/json",
+            data: JSON.stringify(assignmentData),
+            headers: {
+                "Authorization": "Bearer " + token
+            },
+            success: function (response, textStatus, jqXHR) {
+                // API'den 201 Created (veya Ok içinde ResultDto) gelirse
+                console.log("Ödev başarıyla oluşturuldu:", response);
+                $("#formAlert").removeClass("alert-danger").addClass("alert-success")
+                               .text(response.message || "Ödev başarıyla eklendi! ID: " + (response.data ? response.data.assignmentId : response.id) ) // API'nizin döndürdüğü yanıta göre mesajı alın
+                               .show();
+
+                $("#createAssignmentForm")[0].reset();
+                setTimeout(function() {
+                    // Kursun ödevler listesi sayfasına yönlendir
+                    window.location.href = `/Courses/Assignments/${currentCourseId}`;
+                }, 2000);
+            },
+                    error: function (jqXHR, textStatus, errorThrown) {
+                        console.error("API Hata Yanıtı:", jqXHR.responseText);
+                        var errorMessage = "Ödev eklenirken bir hata oluştu.";
+                        if (jqXHR.responseJSON && jqXHR.responseJSON.message) {
+                            errorMessage = jqXHR.responseJSON.message;
+                        } else if (jqXHR.responseJSON && jqXHR.responseJSON.errors) {
+                            // Model validation hatalarını işle
+                            var errors = [];
+                            for(var key in jqXHR.responseJSON.errors) {
+                                if(jqXHR.responseJSON.errors.hasOwnProperty(key)) {
+                                    errors.push(jqXHR.responseJSON.errors[key].join(' '));
+                                }
+                            }
+                            errorMessage = errors.join(' \n');
+                        } else if (jqXHR.responseText) {
+                            try {
+                                 var responseTextObj = JSON.parse(jqXHR.responseText);
+                                 if(responseTextObj.message) errorMessage = responseTextObj.message;
+                            } catch(e){}
+                        }
+                        $("#formAlert").addClass("alert-danger").text(errorMessage).show();
+                    }
+                });
+            });
+        });
+    </script>
+}

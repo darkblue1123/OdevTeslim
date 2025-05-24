@@ -4,29 +4,47 @@ using Microsoft.Extensions.Configuration;
 using System.Linq;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization; // [Authorize] attribute'u için (sayfaya erişim için)
-
+using System.Text.Json; // JsonSerializer için (veya Newtonsoft.Json kullanıyorsanız ilgili using)
+using Microsoft.AspNetCore.Identity;
+using Microsoft.VisualStudio.Web.CodeGenerators.Mvc.Templates.General;
 public class CoursesController : Controller
 {
-    private readonly IConfiguration _configuration;
+    private readonly string _apiBaseUrl;
 
     public CoursesController(IConfiguration configuration)
     {
-        _configuration = configuration;
+        _apiBaseUrl = configuration.GetValue<string>("ApiBaseURL");
     }
 
-  
-    public IActionResult Index() 
+    public IActionResult Index()
     {
-        ViewData["Title"] = "Ders Listesi";
-        ViewBag.ApiBaseURL = _configuration["ApiBaseUrl"]; // appsettings.json'dan API adresini al
-
-        // Oturum açmış kullanıcının rollerini JavaScript'e aktarmak için
-        var userRoles = User.Claims
-                            .Where(c => c.Type == ClaimTypes.Role)
-                            .Select(c => c.Value)
-                            .ToList();
-        ViewBag.UserRolesJson = System.Text.Json.JsonSerializer.Serialize(userRoles);
-
-        return View(); // Views/Courses/Index.cshtml dosyasını döndürecek
+        ViewBag.ApiBaseURL = _apiBaseUrl; // Bu hala JavaScript için gerekli
+        // ViewBag.UserRolesJson ARTIK BURADA AYARLANMIYOR
+        return View();
     }
+
+    public IActionResult Details(int id)
+    {
+        ViewBag.CourseId = id;
+        ViewBag.ApiBaseURL = _apiBaseUrl;
+        // ViewBag.UserRolesJson ARTIK BURADA AYARLANMIYOR
+        return View();
+    }
+
+    public IActionResult Assignments(int id)
+    {
+        ViewBag.CourseId = id;
+        ViewBag.ApiBaseURL = _apiBaseUrl;
+        // ViewBag.UserRolesJson ARTIK BURADA AYARLANMIYOR
+        return View();
+    }
+    [HttpGet]
+    public IActionResult Create()
+    {
+        // Sadece View'i döndürürken API adresini JavaScript'in kullanması için ViewBag'e atıyoruz.
+        ViewBag.ApiBaseURL = _apiBaseUrl;
+        return View(); // Views/Courses/Create.cshtml dosyasını arayacak
+    }
+
 }
+

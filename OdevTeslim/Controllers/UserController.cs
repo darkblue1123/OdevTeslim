@@ -32,6 +32,7 @@ namespace Uyg.API.Controllers
         }
 
         [HttpGet]
+        [Authorize(Roles = "Admin")] // Sadece Admin'ler erişebilir
         public List<UserDto> List()
         {
             var users = _userManager.Users.ToList();
@@ -39,7 +40,7 @@ namespace Uyg.API.Controllers
             return userDtos;
         }
      
-        [HttpGet("id")]
+        [HttpGet]
         public UserDto GetById(string id)
         {
             var user = _userManager.Users.Where(s => s.Id == id).SingleOrDefault();
@@ -138,6 +139,53 @@ namespace Uyg.API.Controllers
             string token = new JwtSecurityTokenHandler().WriteToken(tokenObject);
 
             return token;
+        }
+
+        [HttpPut("{id}")] // PUT /api/User/{id}  (Route şemanız /api/[controller]/[action] olduğu için PUT /api/User/UpdateUser/{id} de olabilir)
+        [Authorize(Roles = "Admin")] // Sadece Admin kullanıcı güncelleyebilsin
+        public async Task<IActionResult> UpdateUser(string id, [FromBody] UserUpdateDto dto)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+
+            var user = await _userManager.FindByIdAsync(id);
+            if (user == null)
+            {
+                result.Status = false;
+                result.Message = "Güncellenecek kullanıcı bulunamadı.";
+                return NotFound(result);
+            }
+
+            // Gelen DTO'daki verilerle kullanıcıyı güncelle
+            // AutoMapper kullanıyorsanız: _mapper.Map(dto, user);
+            // Manuel güncelleme:
+            user.UserName = dto.UserName;
+            user.Email = dto.Email;
+            user.FirstName = dto.FirstName; // AppUser modelinizdeki property adıyla eşleşmeli
+            user.LastName = dto.LastName;   // AppUser modelinizdeki property adıyla eşleşmeli
+            user.PhoneNumber = dto.PhoneNumber;
+            // Güvenlik nedeniyle Email veya UserName değişiyorsa ek doğrulamalar gerekebilir (örn: EmailConfirmed, SecurityStamp güncelleme)
+            // user.NormalizedUserName = _userManager.KeyNormalizer.NormalizeName(dto.UserName); // Gerekebilir
+            // user.NormalizedEmail = _userManager.KeyNormalizer.NormalizeEmail(dto.Email); // Gerekebilir
+
+            var identityResult = await _userManager.UpdateAsync(user);
+
+            if (!identityResult.Succeeded)
+            {
+                result.Status = false;
+                result.Message = "Kullanıcı güncellenirken hatalar oluştu:";
+                foreach (var error in identityResult.Errors)
+                {
+                    result.Message += $" {error.Description}";
+                }
+                return BadRequest(result);
+            }
+
+            result.Status = true;
+            result.Message = "Kullanıcı başarıyla güncellendi.";
+            return Ok(result); // Veya NoContent() (204) dönebilirsiniz.
         }
 
 

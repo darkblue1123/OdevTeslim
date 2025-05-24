@@ -1,0 +1,121 @@
+﻿@* MVC Projesi - Views/Courses/Create.cshtml *@
+@{
+    ViewData["Title"] = "Yeni Kurs Oluştur";
+    Layout = "_AdminLayout";
+
+}
+
+<div class="container mt-4">
+    <h3>Yeni Kurs Oluştur</h3>
+    <hr />
+
+    <div class="row">
+        <div class="col-md-8">
+            <form id="createCourseForm">
+                <div class="form-group mb-3">
+                    <label for="courseName" class="form-label">Kurs Adı:</label>
+                    <input type="text" id="courseName" name="name" class="form-control" required />
+                    <div class="invalid-feedback">Kurs adı boş bırakılamaz.</div>
+                </div>
+
+                <div class="form-group mb-3">
+                    <label for="courseDescription" class="form-label">Açıklama (Opsiyonel):</label>
+                    <textarea id="courseDescription" name="description" class="form-control" rows="3"></textarea>
+                </div>
+
+                <button type="submit" class="btn btn-primary">Kursu Kaydet</button>
+                <a asp-action="Index" asp-controller="Courses" class="btn btn-secondary">İptal Et</a>
+            </form>
+            <div id="createCourseAlert" class="alert mt-3" style="display: none;"></div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function () {
+            var apiBaseUrl = "@Html.Raw(ViewBag.ApiBaseUrl)";
+            var token = localStorage.getItem("token");
+
+            if (!token) {
+                // Token yoksa ve API yetkilendirme gerektiriyorsa, kullanıcıyı uyar veya login'e yönlendir.
+                console.warn("Create.cshtml - Token bulunamadı.");
+                $("#createCourseAlert").addClass("alert-danger").text("İşlem yapmak için giriş yapmalısınız. Lütfen giriş yapıp tekrar deneyin.").show();
+                $("#createCourseForm button[type='submit']").prop("disabled", true);
+                // location.href = "/Login"; // Opsiyonel: direkt login'e yönlendir
+                // return;
+            }
+
+
+            $("#createCourseForm").on("submit", function (event) {
+                event.preventDefault();
+                $("#createCourseAlert").hide().removeClass("alert-success alert-danger alert-warning").text("");
+
+                var courseName = $("#courseName").val().trim();
+                var courseDescription = $("#courseDescription").val().trim();
+
+                if (!courseName) {
+                    $("#createCourseAlert").addClass("alert-warning").text("Kurs adı boş bırakılamaz.").show();
+                    return;
+                }
+
+                var courseData = { // API'deki CourseCreateDto ile eşleşmeli
+                    name: courseName,
+                    description: courseDescription
+                };
+
+                console.log("Gönderilecek Kurs Verisi:", courseData);
+
+                $("#createCourseForm button[type='submit']").prop("disabled", true).text("Kaydediliyor...");
+
+                $.ajax({
+                    url: `${apiBaseUrl}/courses`, // API'deki CoursesController'ın POST endpoint'i
+                    type: "POST",
+                    contentType: "application/json",
+                    data: JSON.stringify(courseData),
+                    headers: {
+                        "Authorization": "Bearer " + token
+                    },
+                    success: function (response, textStatus, jqXHR) {
+                        $("#createCourseForm button[type='submit']").prop("disabled", false).text("Kursu Kaydet");
+
+                        // API'niz CreateCourse metodu 201 Created ile CourseDto dönüyor.
+                        if (jqXHR.status === 201 && response && response.id) {
+                             $("#createCourseAlert").addClass("alert-success")
+                                                .text(`Kurs "${response.name}" başarıyla oluşturuldu (ID: ${response.id})! Yönlendiriliyorsunuz...`).show();
+                            $("#createCourseForm")[0].reset();
+                            setTimeout(function() {
+                                window.location.href = "@Url.Action("Index", "Courses")"; // Kurs listesine yönlendir
+                            }, 2000);
+                        } else {
+                            // API'den beklenmedik bir başarılı yanıt formatı
+                             $("#createCourseAlert").addClass("alert-warning").text("Kurs oluşturuldu ancak yanıt beklenildiği gibi değil.").show();
+                        }
+                    },
+                    error: function (jqXHR, textStatus, errorThrown) {
+                        $("#createCourseForm button[type='submit']").prop("disabled", false).text("Kursu Kaydet");
+                        var errorMessage = "Kurs oluşturulurken bir API hatası oluştu.";
+                        if (jqXHR.responseJSON) {
+                            if (jqXHR.responseJSON.message) {
+                                errorMessage = jqXHR.responseJSON.message;
+                            } else if (jqXHR.responseJSON.errors) { // Model validation hataları
+                                var errors = [];
+                                for(var key in jqXHR.responseJSON.errors) {
+                                    if(jqXHR.responseJSON.errors.hasOwnProperty(key)) {
+                                        errors.push(` ${jqXHR.responseJSON.errors[key].join(' ')}`);
+                                    }
+                                }
+                                errorMessage = "Lütfen hataları düzeltin:" + errors.join('');
+                            } else if (jqXHR.responseJSON.title && jqXHR.status === 400) { // ASP.NET Core default validation error
+                                 errorMessage = "Lütfen girdiğiniz bilgileri kontrol edin. (Hata: " + jqXHR.responseJSON.title + ")";
+                            }
+                        } else if (jqXHR.responseText) {
+                            try { var rt = JSON.parse(jqXHR.responseText); if(rt.message) errorMessage = rt.message; } catch(e){}
+                        }
+                        $("#createCourseAlert").addClass("alert-danger").text(errorMessage).show();
+                    }
+                });
+            });
+        });
+    </script>
+}
