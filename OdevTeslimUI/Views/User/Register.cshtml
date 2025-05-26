@@ -1,0 +1,205 @@
+﻿@* MVC Projesi - Views/Account/Register.cshtml *@
+@{
+    ViewData["Title"] = "Kayıt Ol";
+    Layout = null;
+}
+
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    @* ... (mevcut head içeriğiniz aynı) ... *@
+    <title>@ViewData["Title"] - Proje Adınız</title>
+    <link href="~/sbadmin/vendor/fontawesome-free/css/all.min.css" rel="stylesheet" type="text/css">
+    <link href="https://fonts.googleapis.com/css?family=Nunito:200,200i,300,300i,400,400i,600,600i,700,700i,800,800i,900,900i"
+          rel="stylesheet">
+    <link href="~/sbadmin/css/sb-admin-2.min.css" rel="stylesheet">
+    <style>
+        #registerAlert p {
+            margin-bottom: 0.5rem;
+        }
+
+            #registerAlert p:last-child {
+                margin-bottom: 0;
+            }
+
+        #registerAlert ul {
+            padding-left: 20px;
+            margin-bottom: 0;
+        }
+    </style>
+</head>
+<body class="bg-gradient-primary">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-xl-6 col-lg-7 col-md-9">
+                <div class="card o-hidden border-0 shadow-lg my-5">
+                    <div class="card-body p-0">
+                        <div class="row">
+                            <div class="col-lg-12">
+                                <div class="p-5">
+                                    <div class="text-center">
+                                        <h1 class="h4 text-gray-900 mb-4">Yeni Hesap Oluştur!</h1>
+                                    </div>
+                                    <form class="user" id="registerForm">
+                                        <div class="form-group">
+                                            <input type="text" class="form-control form-control-user" id="username" name="UserName"
+                                                   placeholder="Kullanıcı Adı" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <input type="email" class="form-control form-control-user" id="email" name="Email"
+                                                   placeholder="Email Adresi" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <input type="text" class="form-control form-control-user" id="fullName" name="FullName"
+                                                   placeholder="Ad Soyad" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <input type="tel" class="form-control form-control-user" id="phoneNumber" name="PhoneNumber"
+                                                   placeholder="Telefon Numarası (Opsiyonel)">
+                                        </div>
+
+                                        @* ----- YENİ ROL SEÇİM ALANI ----- *@
+                                        <div class="form-group">
+                                            <select class="form-control form-control-user" id="selectedRole" name="SelectedRole" required>
+                                                <option value="" disabled selected>Kayıt Türünü Seçin...</option>
+                                                <option value="Student">Öğrenci Olarak Kaydol</option>
+                                                <option value="Teacher">Öğretmen Olarak Kaydol</option>
+                                            </select>
+                                        </div>
+                                        @* ----- ROL SEÇİM ALANI SONU ----- *@
+
+                                        <div class="form-group row">
+                                            <div class="col-sm-6 mb-3 mb-sm-0">
+                                                <input type="password" class="form-control form-control-user" id="password" name="Password"
+                                                       placeholder="Şifre" required>
+                                            </div>
+                                            <div class="col-sm-6">
+                                                <input type="password" class="form-control form-control-user" id="confirmPassword" name="ConfirmPassword"
+                                                       placeholder="Şifre Tekrar" required>
+                                            </div>
+                                        </div>
+                                        <button type="submit" class="btn btn-primary btn-user btn-block">
+                                            Hesap Oluştur
+                                        </button>
+                                    </form>
+                                    <hr>
+                                    <div id="registerAlert" class="alert" style="display: none; word-break: break-word;"></div>
+                                    <div class="text-center">
+                                        <a class="small" asp-controller="User" asp-action="Login">Zaten bir hesabınız var mı? Giriş Yapın!</a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="~/sbadmin/vendor/jquery/jquery.min.js"></script>
+    <script src="~/sbadmin/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+    <script src="~/sbadmin/vendor/jquery-easing/jquery.easing.min.js"></script>
+    <script src="~/sbadmin/js/sb-admin-2.min.js"></script>
+
+    <script>
+        $(document).ready(function () {
+            var apiBaseUrl = "@Html.Raw(ViewBag.ApiBaseUrl)";
+
+            $("#registerForm").on("submit", function (event) {
+                event.preventDefault();
+                $("#registerAlert").hide().removeClass("alert-success alert-danger alert-warning").empty();
+
+                var password = $("#password").val();
+                var confirmPassword = $("#confirmPassword").val();
+                var selectedRole = $("#selectedRole").val(); // Seçilen rolü al
+
+                if (password !== confirmPassword) {
+                    $("#registerAlert").addClass("alert-danger").text("Şifreler uyuşmuyor!").show();
+                    return;
+                }
+
+                if (!selectedRole) { // Rol seçilmiş mi kontrol et
+                    $("#registerAlert").addClass("alert-warning").text("Lütfen kayıt türünü (Öğrenci/Öğretmen) seçin.").show();
+                    return;
+                }
+
+                var registrationData = {
+                    userName: $("#username").val().trim(),
+                    email: $("#email").val().trim(),
+                    fullName: $("#fullName").val().trim(),
+                    phoneNumber: $("#phoneNumber").val().trim() || null,
+                    password: password,
+                    selectedRole: selectedRole // Seçilen rolü veriye ekle
+                };
+
+                var isValid = true;
+                if (!registrationData.userName || !registrationData.email || !registrationData.fullName || !registrationData.password || !registrationData.selectedRole) {
+                     $("#registerAlert").addClass("alert-warning").text("Lütfen tüm zorunlu alanları doldurun.").show();
+                    isValid = false;
+                }
+                if(!isValid) return;
+
+                var $submitButton = $(this).find("button[type='submit']");
+                $submitButton.prop("disabled", true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Kaydediliyor...');
+
+                $.ajax({
+                    url: `${apiBaseUrl}/User/Add`, // API endpoint'i
+                    type: "POST",
+                    contentType: "application/json",
+                    data: JSON.stringify(registrationData),
+                    success: function (response) {
+                        // ... (mevcut success bloğunuz aynı kalabilir, API'den gelen ResultDto.Message'ı .html() ile basar) ...
+                        $submitButton.prop("disabled", false).text("Hesap Oluştur");
+                        if (response && response.status === true) {
+                            $("#registerAlert").removeClass("alert-danger alert-warning").addClass("alert-success")
+                                           .html(response.message || "Kayıt başarılı! Giriş sayfasına yönlendiriliyorsunuz...").show();
+                            $("#registerForm")[0].reset();
+                            setTimeout(function() {
+                                window.location.href = "@Url.Action("Login", "User")";
+                            }, 3000);
+                        } else {
+                            $("#registerAlert").removeClass("alert-success alert-warning").addClass("alert-danger")
+                                           .html(response.message || "Kayıt işlemi başarısız oldu. Lütfen bilgilerinizi kontrol edin.").show();
+                        }
+                    },
+                    error: function (jqXHR, textStatus, errorThrown) {
+                        // ... (mevcut error bloğunuz aynı kalabilir, API'den gelen hataları .html() ile basar) ...
+                        $submitButton.prop("disabled", false).text("Hesap Oluştur");
+                        console.error("Kayıt API Hatası:", jqXHR.status, jqXHR.responseText);
+                        var errorMessage = "Kayıt sırasında bir sunucu hatası oluştu. Lütfen daha sonra tekrar deneyin.";
+                        if (jqXHR.responseJSON) {
+                            if (jqXHR.responseJSON.message) {
+                                errorMessage = jqXHR.responseJSON.message;
+                            } else if (jqXHR.responseJSON.errors) {
+                                var errorsText = "Lütfen aşağıdaki hataları düzeltin:<ul>";
+                                for(var key in jqXHR.responseJSON.errors) {
+                                    if(jqXHR.responseJSON.errors.hasOwnProperty(key)) {
+                                        errorsText += `<li>${jqXHR.responseJSON.errors[key].join(' ')}</li>`;
+                                    }
+                                }
+                                errorsText += "</ul>";
+                                 $("#registerAlert").removeClass("alert-success alert-warning").addClass("alert-danger").html(errorsText).show();
+                                return;
+                            } else if (jqXHR.responseJSON.title && jqXHR.status === 400) {
+                                 errorMessage = jqXHR.responseJSON.title + (jqXHR.responseJSON.detail ? ("<br/>" + jqXHR.responseJSON.detail) : "");
+                            }
+                             $("#registerAlert").removeClass("alert-success alert-warning").addClass("alert-danger").html(errorMessage).show();
+                        } else if (jqXHR.responseText) {
+                             try {
+                                var rt = JSON.parse(jqXHR.responseText);
+                                if(rt.message || rt.Message) { // Hem message hem Message kontrolü
+                                    $("#registerAlert").removeClass("alert-success alert-warning").addClass("alert-danger").html(rt.message || rt.Message).show();
+                                    return;
+                                }
+                             } catch(e) { }
+                             $("#registerAlert").removeClass("alert-success alert-warning").addClass("alert-danger").text(jqXHR.responseText.substring(0,300)).show();
+                        } else {
+                             $("#registerAlert").removeClass("alert-success alert-warning").addClass("alert-danger").text(errorMessage).show();
+                        }
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>

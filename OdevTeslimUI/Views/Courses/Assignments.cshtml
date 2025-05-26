@@ -9,10 +9,10 @@
     <div id="assignmentsPageCard" class="card" style="display: none;">
         <div class="card-header d-flex justify-content-between align-items-center">
             <h2 id="courseNameForAssignments" class="mb-0"></h2>
-            @* YENİ ÖDEV EKLE BUTONU BURADA (Başlangıçta gizli) *@
             <a href="#" id="btnAddCourseAssignment" class="btn btn-success" style="display: none;" title="Bu Kursa Yeni Ödev Ekle">
                 <i class="fa fa-plus"></i> Yeni Ödev Ekle
             </a>
+
         </div>
         <div class="card-body">
             <h5 class="card-title">Bu Kursa Atanmış Ödevler</h5>
@@ -36,7 +36,35 @@
         Kurs bilgileri bulunamadı veya bu kursa ait ödevlere erişim yetkiniz yok.
     </div>
 </div>
-
+@* ----- ÖDEV TESLİMLERİNİ GÖRÜNTÜLEME MODALI ----- *@
+<div class="modal fade" id="viewSubmissionsModal" tabindex="-1" aria-labelledby="viewSubmissionsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="viewSubmissionsModalLabel">Ödev Teslimleri</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
+            </div>
+            <div class="modal-body">
+                <h6 id="modalAssignmentTitle"></h6>
+                <div id="modalSubmissionList" class="mt-2">
+                    @* Teslimler buraya JavaScript ile dinamik olarak eklenecek *@
+                </div>
+                <div id="modalSubmissionsLoading" class="text-center" style="display:none;">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Yükleniyor...</span>
+                    </div>
+                    <p>Teslimler yükleniyor...</p>
+                </div>
+                <div id="modalNoSubmissions" class="alert alert-info" style="display:none;">Bu ödev için henüz teslim yapılmamış.</div>
+                <div id="modalErrorSubmissions" class="alert alert-danger" style="display:none;">Teslimler yüklenirken bir hata oluştu.</div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Kapat</button>
+            </div>
+        </div>
+    </div>
+</div>
+@* ----- MODAL SONU ----- *@
 @section Scripts {
     <script>
         // Bu fonksiyon JWT token'dan kullanıcı ID'sini parse etmeye çalışır.
@@ -69,10 +97,14 @@
             }
         }
 
-        $(document).ready(function () {
-            var courseId = @ViewBag.CourseId;
-            var apiBaseUrl = "@Html.Raw(ViewBag.ApiBaseUrl)";
-            var token = localStorage.getItem("token");
+        var globalCourseInfoForAssignmentsPage = null;
+
+          $(document).ready(function () {
+        var courseId = @ViewBag.CourseId;
+        var apiBaseUrl = "@Html.Raw(ViewBag.ApiBaseUrl)";
+        var token = localStorage.getItem("token");
+        var userRoles = GetCurrentUserRolesFromToken(); // Rolleri en başta al
+
 
             // Kurs Detaylarına Geri Dön linkini ayarla
             $("#backToCourseDetails").attr("href", `/Courses/Details/${courseId}`);
@@ -96,77 +128,66 @@
                 // return;
             }
 
-            $.ajax({
-                url: `${apiBaseUrl}/courses/${courseId}/assignments-with-details`, // API endpoint'i
+                $.ajax({
+                url: `${apiBaseUrl}/courses/${courseId}/assignments-with-details`,
                 type: "GET",
-                headers: {
-                    "Authorization": "Bearer " + token
-                },
+                headers: { "Authorization": "Bearer " + token },
                 success: function (response) {
                     $("#assignmentsLoadingMessage").hide();
-                    if (response.success) {
-                        var courseInfo = response.courseInfo;
+                    if (response && response.success) {
+                        globalCourseInfoForAssignmentsPage = response.courseInfo; // Global değişkene ata
                         var assignments = response.assignments;
 
-                        $("#courseNameForAssignments").text(`Kurs: ${courseInfo.name || "N/A"} - Ödevler`);
+                        $("#courseNameForAssignments").text(`Kurs: ${globalCourseInfoForAssignmentsPage.name || "N/A"} - Ödevler`);
 
-                        // ----- YENİ ÖDEV EKLE BUTONUNUN GÖRÜNÜRLÜĞÜ -----
+                        // ----- "YENİ ÖDEV EKLE" BUTONU GÖRÜNÜRLÜĞÜ -----
                         var currentUserId = GetCurrentUserIdFromToken();
-
-                        // API'den courseInfo.teacherId geldiğinden emin olalım
-                        if (courseInfo && courseInfo.teacherId !== undefined) {
-                            if (userRoles.includes("Admin") || (userRoles.includes("Teacher") && courseInfo.teacherId.toString() === currentUserId)) {
-                                // Ödev ekleme sayfanızın URL'ini buraya doğru şekilde girin
-                                // Bu URL, yeni bir ödev oluşturma formunu gösteren MVC action'ına gitmeli
-                                // ve courseId'yi parametre olarak almalı.
+                        if (globalCourseInfoForAssignmentsPage && globalCourseInfoForAssignmentsPage.teacherId !== undefined) {
+                            if (userRoles.includes("Admin") || (userRoles.includes("Teacher") && globalCourseInfoForAssignmentsPage.teacherId.toString() === currentUserId)) {
                                 var addAssignmentUrl = `/Assignments/Create?courseId=${courseId}`;
                                 $("#btnAddCourseAssignment").attr("href", addAssignmentUrl).show();
-                                console.log("Yeni Ödev Ekle butonu gösteriliyor.");
                             } else {
                                 $("#btnAddCourseAssignment").hide();
-                                console.log("Yeni Ödev Ekle butonu gizlendi. Yetki yetersiz.");
                             }
                         } else {
                             $("#btnAddCourseAssignment").hide();
-                            console.warn("courseInfo.teacherId API'den gelmedi veya tanımsız, Yeni Ödev Ekle butonu için öğretmen yetki kontrolü yapılamadı.");
+                            console.warn("courseInfo.teacherId API'den gelmedi, 'Yeni Ödev Ekle' butonu yetki kontrolü yapılamadı.");
                         }
                         // ----- BUTON GÖRÜNÜRLÜĞÜ SONU -----
-
 
                         var $assignmentListContainer = $("#assignmentListContainer");
                         $assignmentListContainer.empty();
 
                         if (assignments && assignments.length > 0) {
-                            var assignmentHtml = '<ul class="list-group">';
+                            var assignmentHtmlOutput = ''; // HTML'i biriktirip tek seferde append etmek daha performanslı olabilir
                             $.each(assignments, function (index, assignment) {
-                                var dueDateText = 'Belirtilmemiş';
-                                if(assignment.dueDate) {
-                                    try {
-                                        dueDateText = new Date(assignment.dueDate).toLocaleDateString('tr-TR', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-                                    } catch(e) { console.error("Due date format error", e); }
+                                var dueDateText = assignment.dueDate ? new Date(assignment.dueDate).toLocaleString('tr-TR', { dateStyle: 'long', timeStyle: 'short' }) : 'Belirtilmemiş';
+                                var createdDateText = assignment.createdDate ? new Date(assignment.createdDate).toLocaleDateString('tr-TR') : 'N/A';
+
+                                var viewSubmissionsButtonHtml = "";
+                                // "Cevapları Gör" butonu sadece Admin veya kursun öğretmeni ise gösterilecek
+                                if (globalCourseInfoForAssignmentsPage && globalCourseInfoForAssignmentsPage.teacherId !== undefined) {
+                                    if (userRoles.includes("Admin") || (userRoles.includes("Teacher") && globalCourseInfoForAssignmentsPage.teacherId.toString() === currentUserId)) {
+                                        viewSubmissionsButtonHtml = `<button class="btn btn-sm btn-outline-primary mt-2 btnViewSubmissions" data-assignmentid="${assignment.id}" data-assignmenttitle="${assignment.title || 'Başlıksız Ödev'}">Teslimleri Gör</button>`;
+                                    }
                                 }
 
-                                var createdDateText = 'N/A';
-                                if(assignment.createdDate) {
-                                    try {
-                                        createdDateText = new Date(assignment.createdDate).toLocaleDateString('tr-TR');
-                                    } catch(e) { console.error("Created date format error", e); }
-                                }
-
-                                assignmentHtml += `
-                                    <li class="list-group-item">
-                                        <h5>${assignment.title || "Başlıksız Ödev"} (ID: ${assignment.id})</h5>
-                                        <p>${assignment.description || "Açıklama yok."}</p>
-                                        <small class="text-muted">Oluşturulma: ${createdDateText} | Son Teslim: <strong>${dueDateText}</strong></small>
-                                        <div>
-        @* Ödev detayları, teslim etme, düzenleme vb. linkler buraya eklenebilir. *@
-        @* Örn: <a href="/Assignments/Submissions/${assignment.id}?courseId=${courseId}" class="btn btn-sm btn-outline-info mt-2">Teslimleri Gör</a> *@
-        @* VEYA: <a href="/Assignments/Edit/${assignment.id}" class="btn btn-sm btn-outline-warning mt-2">Düzenle</a> (Yetkiye bağlı) *@
+                                assignmentHtmlOutput += `
+                                    <div class="card mb-3 assignment-item-onpage">
+                                        <div class="card-body">
+                                            <h5 class="card-title">${assignment.title || "Başlıksız Ödev"} (ID: ${assignment.id})</h5>
+                                            <p class="card-text">${assignment.description || "Açıklama yok."}</p>
+                                            <p><small class="text-muted">Oluşturulma: ${createdDateText} | Son Teslim: <strong>${dueDateText}</strong></small></p>
+                                            <div>
+                                                ${viewSubmissionsButtonHtml}
+        @* Öğrenci bu sayfadan ödev teslim etmeyeceği için teslim formu burada yok. *@
+        @* Öğrencinin kendi kurs ödevleri sayfasında (CourseAssignmentsPage.cshtml) teslim formu vardı. *@
+        @* Burası Admin/Öğretmen için ödevleri ve teslimleri yönetme sayfası gibi. *@
+                                            </div>
                                         </div>
-                                    </li>`;
+                                    </div>`;
                             });
-                            assignmentHtml += '</ul>';
-                            $assignmentListContainer.html(assignmentHtml).show();
+                            $assignmentListContainer.html(assignmentHtmlOutput).show(); // Tek seferde HTML'i ekle
                             $("#noAssignmentsMessage").hide();
                         } else {
                             $("#noAssignmentsMessage").show();
@@ -177,19 +198,70 @@
                         $("#courseDataNotFoundMessage").text(response.message || "Kurs veya ödev verisi alınamadı.").show();
                     }
                 },
-                error: function (jqXHR, textStatus, errorThrown) {
-                    $("#assignmentsLoadingMessage").hide();
-                    console.error("API isteği başarısız oldu (Ödevler): ", textStatus, errorThrown, jqXHR.responseText);
-                    if (jqXHR.status === 404) {
-                        $("#courseDataNotFoundMessage").text("Kurs bulunamadı veya bu kursa ait ödev endpoint'i yok.").show();
-                    } else if (jqXHR.status === 401 || jqXHR.status === 403) {
-                         $("#courseDataNotFoundMessage").text("Bu bilgilere erişim yetkiniz bulunmamaktadır. Lütfen giriş yapın veya yetkilerinizi kontrol edin.").show();
-                    }
-                    else {
-                        $("#courseDataLoadingErrorMessage").show();
-                    }
-                }
+                error: function (jqXHR, textStatus, errorThrown) { /* ... (mevcut hata yönetimi) ... */ }
             });
-        });
+
+
+            // ----- "TESLİMLERİ GÖR" BUTONUNA TIKLANINCA MODALI DOLDUR VE AÇ -----
+            $(document).on("click", ".btnViewSubmissions", function() {
+                var assignmentId = $(this).data("assignmentid");
+                var assignmentTitle = $(this).data("assignmenttitle");
+
+                if (!assignmentId) return;
+
+                $("#modalAssignmentTitle").text(`"${assignmentTitle}" için Teslimler`);
+                $("#modalSubmissionList").empty();
+                $("#modalNoSubmissions").hide();
+                $("#modalErrorSubmissions").hide();
+                $("#modalSubmissionsLoading").show();
+
+                var submissionsModal = new bootstrap.Modal(document.getElementById('viewSubmissionsModal'));
+                submissionsModal.show();
+
+                // API'den bu ödeve ait teslimleri çek
+                $.ajax({
+                    url: `${apiBaseUrl}/assignments/${assignmentId}/submissions`, // API AssignmentSubmissionsController GetAssignmentSubmissions
+                    type: "GET",
+                    headers: { "Authorization": "Bearer " + token },
+                    success: function(submissions) {
+                        $("#modalSubmissionsLoading").hide();
+                        if (submissions && Array.isArray(submissions) && submissions.length > 0) {
+                            var submissionsHtml = '<ul class="list-group">';
+                            $.each(submissions, function(idx, sub) {
+                                var studentName = `${sub.studentFirstName || ''} ${sub.studentLastName || ''}`.trim() || 'Bilinmeyen Öğrenci';
+                                var submissionDateText = sub.submissionDate ? new Date(sub.submissionDate).toLocaleString('tr-TR') : 'N/A';
+                                var gradeText = sub.grade !== null ? sub.grade.toString() : 'Not Verilmemiş';
+                                var feedbackText = sub.feedback || 'Geri bildirim yok.';
+                                var gradedDateText = sub.gradedDate ? new Date(sub.gradedDate).toLocaleString('tr-TR') : '';
+
+                                submissionsHtml += `
+                                    <li class="list-group-item">
+                                        <p><strong>Öğrenci:</strong> ${studentName} (ID: ${sub.studentId})</p>
+                                        <p><strong>Teslim Tarihi:</strong> ${submissionDateText}</p>
+                                        <p><strong>Cevap/İçerik:</strong></p>
+                                        <pre style="white-space: pre-wrap; word-wrap: break-word; background-color: #f8f9fa; padding: 10px; border-radius: 4px;">${sub.content || "İçerik yok."}</pre>
+                                        <hr>
+                                        <p><strong>Not:</strong> ${gradeText}</p>
+                                        <p><strong>Geri Bildirim:</strong> ${feedbackText}</p>
+                                        ${gradedDateText ? `<p><small class="text-muted">Notlandırma Tarihi: ${gradedDateText}</small></p>` : ''}
+        @* Buraya not verme/feedback düzenleme formu da eklenebilir (Admin/Öğretmen için) *@
+                                    </li>`;
+                            });
+                            submissionsHtml += '</ul>';
+                            $("#modalSubmissionList").html(submissionsHtml);
+                        } else {
+                            $("#modalNoSubmissions").show();
+                        }
+                    },
+                    error: function(jqXHR) {
+                        $("#modalSubmissionsLoading").hide();
+                        var errorMsg = "Teslimler yüklenirken bir API hatası oluştu.";
+                         if (jqXHR.status === 403) { errorMsg = "Bu ödevin teslimlerini görme yetkiniz yok.";}
+                         else if (jqXHR.status === 404) { errorMsg = "Ödev veya teslim bilgileri bulunamadı.";}
+                        $("#modalErrorSubmissions").text(errorMsg).show();
+                    }
+                });
+            });
+        }); // document.ready sonu
     </script>
 }

@@ -1,0 +1,179 @@
+﻿@* MVC Projesi - Views/Courses/CourseAssignmentsPage.cshtml *@
+@{
+    ViewData["Title"] = "Kurs Ödevleri ve Teslim";
+    // Öğrenciye özel bir layout varsa burada belirtilebilir
+    // Layout = "_StudentLayout";
+}
+
+<div class="container mt-4">
+    <div id="courseAssignmentsPageCard" class="card" style="display: none;">
+        <div class="card-header">
+            <h3 id="pageCourseName" class="mb-0">Kurs Yükleniyor...</h3>
+        </div>
+        <div class="card-body">
+            <div id="pageCourseInfoSection">
+                <p><strong>Öğretmen:</strong> <span id="pageTeacherName">Yükleniyor...</span></p>
+                <p><strong>Kurs Açıklaması:</strong> <span id="pageCourseDescription">Yükleniyor...</span></p>
+            </div>
+            <hr>
+            <h4>Bu Kursun Ödevleri</h4>
+            <div id="pageAssignmentList">
+                @* Ödevler ve cevaplama formları buraya JavaScript ile dinamik olarak eklenecek *@
+            </div>
+            <div id="pageAssignmentsLoading" class="text-center mt-3">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Yükleniyor...</span>
+                </div>
+                <p>Kurs bilgileri ve ödevler yükleniyor...</p>
+            </div>
+            <div id="pageNoAssignments" class="alert alert-info mt-3" style="display:none;">Bu kurs için henüz ödev atanmamış.</div>
+            <div id="pageError" class="alert alert-danger mt-3" style="display:none;">Bilgiler yüklenirken bir hata oluştu.</div>
+        </div>
+        <div class="card-footer">
+            <a asp-action="Index" asp-controller="Student" class="btn btn-outline-secondary">Kurslarıma Geri Dön</a>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // GetCurrentUserIdFromToken ve GetCurrentUserRolesFromToken fonksiyonları burada olabilir veya ortak bir .js dosyasından gelebilir.
+        function GetCurrentUserIdFromToken() { /* ... (önceki gibi) ... */ }
+        function GetCurrentUserRolesFromToken() { /* ... (önceki gibi) ... */ }
+
+        $(document).ready(function () {
+            var courseId = @ViewBag.CourseId;
+            var apiBaseUrl = "@Html.Raw(ViewBag.ApiBaseUrl)";
+            var token = localStorage.getItem("token");
+
+            $("#pageAssignmentsLoading").show();
+
+            if (!token) {
+                $("#pageAssignmentsLoading").hide();
+                $("#pageError").text("Bu sayfayı görüntülemek için lütfen giriş yapın.").show();
+                // setTimeout(function() { window.location.href = "/Account/Login"; }, 2000);
+                return;
+            }
+         
+
+            if (!courseId || !apiBaseUrl) {
+                $("#pageAssignmentsLoading").hide();
+                $("#pageError").text("Sayfa yüklenirken bir sorun oluştu (Kurs ID veya API URL eksik).").show();
+                return;
+            }
+
+            // API'den kurs detaylarını ve ödevlerini çek
+            $.ajax({
+                url: `${apiBaseUrl}/courses/${courseId}/assignments-with-details`,
+                type: "GET",
+                headers: { "Authorization": "Bearer " + token },
+                success: function(response) {
+                    $("#pageAssignmentsLoading").hide();
+                    if (response && response.success) {
+                        var courseInfo = response.courseInfo;
+                        var assignments = response.assignments;
+
+                        $("#pageCourseName").text(courseInfo.name || "Kurs Adı Yüklenemedi");
+                        $("#pageTeacherName").text(courseInfo.teacherName || "N/A");
+                        $("#pageCourseDescription").text(courseInfo.description || "Açıklama yok.");
+
+                        var $assignmentListDiv = $("#pageAssignmentList");
+                        $assignmentListDiv.empty();
+
+                        if (assignments && assignments.length > 0) {
+                            $.each(assignments, function(idx, assignment) {
+                                var dueDateText = assignment.dueDate ? new Date(assignment.dueDate).toLocaleString('tr-TR', { dateStyle: 'long', timeStyle: 'short' }) : 'Belirtilmemiş';
+                              
+                                var assignmentCardHtml = `
+                                    <div class="card mb-3 assignment-item-page" id="assignment-page-${assignment.id}">
+                                        <div class="card-header">
+                                            <h5>${assignment.title || "Başlıksız Ödev"} (ID: ${assignment.id})</h5>
+                                        </div>
+                                        <div class="card-body">
+                                            <p>${assignment.description || "Açıklama yok."}</p>
+                                            <p><small class="text-muted">Son Teslim Tarihi: <strong>${dueDateText}</strong></small></p>
+                                            <form class="submission-form-page" data-assignmentid="${assignment.id}">
+                                                <div class="mb-2">
+                                                    <textarea class="form-control submission-text" rows="4" placeholder="Cevabınızı veya teslim notunuzu buraya yazın..." required></textarea>
+                                                </div>
+                                                <button type="submit" class="btn btn-primary btn-sm btn-submit-onpage">Teslim Et</button>
+                                                <div class="submission-alert mt-2" style="display: none;"></div>
+                                            </form>
+                                        </div>
+                                    </div>`;
+                                $assignmentListDiv.append(assignmentCardHtml);
+                            });
+                        } else {
+                            $("#pageNoAssignments").show();
+                        }
+                        $("#courseAssignmentsPageCard").show(); // Ana kartı göster
+                    } else {
+                        $("#pageError").text(response.message || "Kurs veya ödev verileri alınamadı.").show();
+                    }
+                },
+                error: function(jqXHR) {
+                    $("#pageAssignmentsLoading").hide();
+                    var errorMsg = "Kurs ödevleri yüklenirken bir API hatası oluştu.";
+                    if (jqXHR.status === 403) { errorMsg = "Bu kursun ödevlerini görme yetkiniz yok."; }
+                    else if (jqXHR.status === 404) { errorMsg = "Kurs bilgileri bulunamadı."; }
+                    else if (jqXHR.responseJSON && jqXHR.responseJSON.message) { errorMsg = jqXHR.responseJSON.message; }
+                    $("#pageError").text(errorMsg).show();
+                }
+            });
+
+            // Sayfa içindeki "Teslim Et" butonlarına tıklanınca (event delegation)
+            $(document).on("submit", ".submission-form-page", function(event) {
+                event.preventDefault();
+                var $form = $(this);
+                var assignmentId = $form.data("assignmentid");
+                var answerText = $form.find(".submission-text").val().trim();
+                var $alertDiv = $form.find(".submission-alert");
+                var $submitButton = $form.find(".btn-submit-onpage");
+
+                $alertDiv.hide().removeClass("alert-success alert-danger alert-warning").text("");
+
+                if (!answerText) {
+                    $alertDiv.addClass("alert-warning").text("Lütfen bir cevap yazın.").show();
+                    return;
+                }
+
+                var submissionData = { Content: answerText };
+                $submitButton.prop("disabled", true).text("Gönderiliyor...");
+
+                $.ajax({
+                    url: `${apiBaseUrl}/assignments/${assignmentId}/submissions`,
+                    type: "POST",
+                    contentType: "application/json",
+                    data: JSON.stringify(submissionData),
+                    headers: { "Authorization": "Bearer " + token },
+                    success: function(response, textStatus, jqXHR) {
+                        $submitButton.prop("disabled", false).text("Teslim Et");
+                        if (jqXHR.status === 201 && response && response.id) {
+                            $alertDiv.removeClass("alert-danger alert-warning").addClass("alert-success")
+                                     .text("Ödev başarıyla teslim edildi! ID: " + response.id).show();
+                            $form.find(".submission-text").prop("disabled", true);
+                            $submitButton.hide().text("Teslim Edildi").removeClass("btn-primary").addClass("btn-secondary").show().prop("disabled",true);
+                        } else if (response && response.status === true) { // Genel ResultDto
+                             $alertDiv.removeClass("alert-danger alert-warning").addClass("alert-success")
+                                     .text(response.message || "Ödev başarıyla teslim edildi!").show();
+                             $form.find(".submission-text").prop("disabled", true);
+                             $submitButton.hide().text("Teslim Edildi").removeClass("btn-primary").addClass("btn-secondary").show().prop("disabled",true);
+                        } else {
+                            $alertDiv.removeClass("alert-success alert-warning").addClass("alert-danger")
+                                     .text((response && response.message) || "Teslim işlemi tamamlandı ancak yanıt beklenildiği gibi değil.").show();
+                        }
+                    },
+                    error: function(jqXHR) {
+                        $submitButton.prop("disabled", false).text("Teslim Et");
+                        var errorMessage = "Ödev teslim edilirken bir API hatası oluştu.";
+                        // ... (daha detaylı hata mesajı oluşturma, önceki yanıttaki gibi) ...
+                        if (jqXHR.responseJSON && jqXHR.responseJSON.message) { errorMessage = jqXHR.responseJSON.message; }
+                        else if (jqXHR.status === 409) { errorMessage = "Bu ödeve zaten bir teslim yaptınız."; }
+                        else if (jqXHR.status === 400) { errorMessage = "Geçersiz istek: Teslim tarihi geçmiş olabilir veya eksik bilgi."; }
+                        $alertDiv.addClass("alert-danger").text(errorMessage).show();
+                    }
+                });
+            });
+        }); // document.ready sonu
+    </script>
+}

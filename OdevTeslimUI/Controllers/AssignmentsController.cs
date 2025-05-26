@@ -16,18 +16,17 @@ public class AssignmentsController : Controller
     // Yeni ödev oluşturma formunu gösterecek GET action'ı
     // Örn: /Assignments/Create?courseId=123
     [HttpGet]
-    public IActionResult Create([FromQuery] int courseId) // courseId'yi query string'den alır
+    public IActionResult Create([FromQuery] int courseId) 
     {
         if (courseId <= 0)
         {
             TempData["ErrorMessage"] = "Geçersiz Kurs ID.";
-            return RedirectToAction("Index", "Courses"); // Veya uygun bir hata sayfasına
+            return RedirectToAction("Index", "Courses"); 
         }
         ViewBag.CourseId = courseId;
         ViewBag.ApiBaseURL = _apiBaseUrl;
-        // Formun başlığında göstermek için kurs adını da API'den çekip ViewBag'e atabilirsiniz (isteğe bağlı)
-        // Veya JavaScript API'den kurs adını çekip başlığa yazabilir.
-        return View(); // Views/Assignments/Create.cshtml dosyasını arayacak
+        
+        return View(); 
     }
 
 }

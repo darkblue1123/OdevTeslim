@@ -1,16 +1,23 @@
 ﻿@* MVC Projesi - Views/Courses/Details.cshtml *@
 @{
     ViewData["Title"] = "Kurs Detayları";
-    Layout = "_AdminLayout";
-
+    Layout = "_AdminLayout"; // Layout dosyanızın adı doğruysa bu satır kalabilir.
 }
 
 <div class="container mt-4">
     <div id="courseDetailsCard" class="card" style="display: none;">
         <div class="card-header d-flex justify-content-between align-items-center">
             <h2 id="courseName" class="mb-0"></h2>
-            @* Önceki adımda eklediğimiz "Yeni Ödev Ekle" butonu burada olabilir *@
-            @* <a href="#" id="btnAddAssignment" class="btn btn-success" style="display: none;" title="Yeni Ödev Ekle"><i class="fa fa-plus"></i> Yeni Ödev Ekle</a> *@
+            <div>
+                @* Butonları gruplamak için bir div *@
+                @* İleride buraya "Yeni Ödev Ekle" butonu da yetkiye göre eklenebilir *@
+                @* <a href="#" id="btnAddAssignment" class="btn btn-success mr-2" style="display: none;" title="Yeni Ödev Ekle"><i class="fa fa-plus"></i> Yeni Ödev Ekle</a> *@
+
+                @* YENİ: KURSU DÜZENLE BUTONU (Başlangıçta gizli) *@
+                <button type="button" id="btnOpenEditCourseModal" class="btn btn-warning" style="display: none;" title="Kursu Düzenle">
+                    <i class="fa fa-edit"></i> Kursu Düzenle
+                </button>
+            </div>
         </div>
         <div class="card-body">
             <h5 class="card-title">Kurs Bilgileri</h5>
@@ -22,7 +29,7 @@
                 <h5>Bu Kursa Öğrenci Ekle</h5>
                 <form id="addStudentForm">
                     <div class="input-group">
-                        <input type="text" id="studentIdentifierInput" class="form-control" placeholder="Öğrenci ID'si" required> @* Placeholder güncellendi *@
+                        <input type="text" id="studentIdentifierInput" class="form-control" placeholder="Öğrenci ID'si" required>
                         <button class="btn btn-outline-success" type="submit" id="btnAddStudentToCourse">Öğrenciyi Ekle</button>
                     </div>
                     <small class="form-text text-muted">Sistemde kayıtlı bir öğrencinin ID'sini girin.</small>
@@ -59,8 +66,42 @@
     </div>
 </div>
 
+@* ----- KURS DÜZENLEME MODALI ----- *@
+<div class="modal fade" id="editCourseModal" tabindex="-1" aria-labelledby="editCourseModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editCourseModalLabel">Kursu Düzenle</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editCourseForm">
+                    @* Düzenlenecek kursun ID'si JavaScript'te globalCourseInfo.id üzerinden yönetilecek *@
+                    <div class="mb-3">
+                        <label for="editCourseName" class="form-label">Kurs Adı</label>
+                        <input type="text" class="form-control" id="editCourseName" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editCourseDescription" class="form-label">Açıklama</label>
+                        <textarea class="form-control" id="editCourseDescription" rows="3"></textarea>
+                    </div>
+                </form>
+                <div id="editCourseAlert" class="alert mt-2" style="display: none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+                <button type="button" class="btn btn-primary" id="btnSaveChangesCourse">Değişiklikleri Kaydet</button>
+            </div>
+        </div>
+    </div>
+</div>
+@* ----- MODAL SONU ----- *@
+
+
 @section Scripts {
     <script>
+        var globalCourseInfo = null; // Mevcut kurs bilgilerini globalde tutmak için
+
         function GetCurrentUserIdFromToken() {
             var token = localStorage.getItem("token");
             if (!token) return null;
@@ -86,41 +127,38 @@
         function loadCourseDetailsAndStudents(courseId, apiBaseUrl, token) {
             console.log(`loadCourseDetailsAndStudents çağrıldı. Kurs ID: ${courseId}, API URL: ${apiBaseUrl}`);
             $.ajax({
-                url: `${apiBaseUrl}/courses/${courseId}/details-and-students`,
+                url: `${apiBaseUrl}/courses/${courseId}/details-and-students`, // API endpoint'i
                 type: "GET",
                 headers: { "Authorization": "Bearer " + token },
                 success: function (response) {
                     $("#studentsLoadingMessage").hide();
-                    console.log("API Yanıtı (details-and-students):", response); // <-- TÜM YANITI KONSOLA YAZDIR
+                    console.log("API Yanıtı (details-and-students):", response);
 
-                    if (response && response.success === true) { // API'den gelen 'success' alanını kontrol et
-                        var courseInfo = response.courseInfo;
+                    if (response && response.success === true) {
+                        globalCourseInfo = response.courseInfo; // Kurs bilgisini global değişkene ata
                         var enrolledStudents = response.enrolledStudents;
 
-                        console.log("Alınan Kurs Bilgisi:", courseInfo);
+                        console.log("Alınan Kurs Bilgisi:", globalCourseInfo);
                         console.log("Alınan Kayıtlı Öğrenciler:", enrolledStudents);
 
-                        if (courseInfo) {
-                            $("#courseName").text(courseInfo.name || "N/A");
-                            $("#courseDescription").text(courseInfo.description || "");
-                            $("#teacherName").text(courseInfo.teacherName || "Belirtilmemiş");
+                        if (globalCourseInfo) {
+                            $("#courseName").text(globalCourseInfo.name || "N/A");
+                            $("#courseDescription").text(globalCourseInfo.description || "");
+                            $("#teacherName").text(globalCourseInfo.teacherName || "Belirtilmemiş");
                         } else {
                             console.warn("API yanıtında 'courseInfo' nesnesi bulunamadı veya tanımsız.");
                         }
 
-
                         var $studentsTableBody = $("#studentsTableBody");
                         $studentsTableBody.empty();
 
-                        // enrolledStudents'ın bir dizi olup olmadığını ve içinde eleman olup olmadığını kontrol et
                         if (enrolledStudents && Array.isArray(enrolledStudents) && enrolledStudents.length > 0) {
                             console.log(`${enrolledStudents.length} adet öğrenci işlenecek.`);
                             $.each(enrolledStudents, function (index, student) {
-                                console.log(`İşlenen öğrenci [${index}]:`, student); // Her bir öğrenciyi konsola yazdır
-                                if (student && typeof student === 'object') { // student nesnesinin varlığını ve tipini kontrol et
+                                if (student && typeof student === 'object') {
                                     $studentsTableBody.append(`<tr><td>${student.fullName || "N/A"}</td><td>${student.email || "N/A"}</td></tr>`);
                                 } else {
-                                    console.warn(`Tanımsız veya geçersiz öğrenci verisi, index: ${index}, veri:`, student);
+                                    console.warn(`Tanımsız veya geçersiz öğrenci verisi, index: ${index}`);
                                 }
                             });
                             $("#studentListTableContainer").show();
@@ -128,21 +166,25 @@
                         } else {
                             console.log("Kayıtlı öğrenci bulunamadı veya 'enrolledStudents' bir dizi değil/boş.");
                             $("#studentListTableContainer").hide();
-                            $("#noStudentsMessage").show(); // "Bu kursa kayıtlı öğrenci bulunmamaktadır." mesajını göster
+                            $("#noStudentsMessage").show();
                         }
 
                         var userRoles = GetCurrentUserRolesFromToken();
                         var currentUserId = GetCurrentUserIdFromToken();
 
-                        if (courseInfo && courseInfo.teacherId !== undefined) {
-                            if (userRoles.includes("Admin") || (userRoles.includes("Teacher") && courseInfo.teacherId.toString() === currentUserId)) {
+                        // Yetki kontrolleri ve buton/form görünürlükleri
+                        if (globalCourseInfo && globalCourseInfo.teacherId !== undefined) {
+                            if (userRoles.includes("Admin") || (userRoles.includes("Teacher") && globalCourseInfo.teacherId.toString() === currentUserId)) {
                                 $("#addStudentSection").show();
+                                $("#btnOpenEditCourseModal").attr("data-bs-toggle", "modal").attr("data-bs-target", "#editCourseModal").show(); // data attribute'larını burada ekliyoruz
                             } else {
                                 $("#addStudentSection").hide();
+                                $("#btnOpenEditCourseModal").hide();
                             }
                         } else {
                             $("#addStudentSection").hide();
-                            console.warn("courseInfo.teacherId API'den gelmedi, Öğrenci Ekleme formu için yetki kontrolü yapılamadı.");
+                            $("#btnOpenEditCourseModal").hide();
+                            console.warn("courseInfo.teacherId API'den gelmedi, yetki kontrolleri yapılamadı.");
                         }
                         $("#courseDetailsCard").show();
                     } else {
@@ -153,14 +195,7 @@
                 error: function (jqXHR, textStatus, errorThrown) {
                     $("#studentsLoadingMessage").hide();
                     console.error("API isteği başarısız oldu (details-and-students): ", textStatus, errorThrown, jqXHR.responseText);
-                    if (jqXHR.status === 404) {
-                        $("#courseNotFoundMessage").text("Kurs detayları endpoint'i bulunamadı (404). API URL'ini kontrol edin.").show();
-                    } else if (jqXHR.status === 401 || jqXHR.status === 403) {
-                        $("#courseNotFoundMessage").text("Bu bilgilere erişim yetkiniz yok (401/403).").show();
-                    }
-                     else {
-                        $("#courseLoadingErrorMessage").show();
-                    }
+                    // ... (mevcut hata yönetimi)
                 }
             });
         }
@@ -177,55 +212,167 @@
                 return;
             }
             if (!token) {
-                console.warn("LocalStorage'da token bulunamadı. API istekleri yetkilendirme hatası alabilir.");
-                // Gerekirse burada login'e yönlendirme yapabilirsiniz
-                // location.href = "/Login";
+                console.warn("LocalStorage'da token bulunamadı.");
             }
 
             loadCourseDetailsAndStudents(courseId, apiBaseUrl, token);
 
             $("#addStudentForm").on("submit", function(event) {
-                // ... (Öğrenci ekleme AJAX kodunuz aynı kalabilir) ...
-                // ... (önceki yanıttaki gibi) ...
                 event.preventDefault();
                 $("#addStudentAlert").hide().removeClass("alert-success alert-danger alert-warning").text("");
-
                 var studentIdToEnroll = $("#studentIdentifierInput").val().trim();
                 if (!studentIdToEnroll) {
                     $("#addStudentAlert").addClass("alert-warning").text("Lütfen eklenecek öğrencinin ID'sini girin.").show();
                     return;
                 }
-
                 var enrollData = { StudentId: studentIdToEnroll };
                 $("#btnAddStudentToCourse").prop("disabled", true).text("Ekleniyor...");
-
                 $.ajax({
-                    url: `${apiBaseUrl}/courses/${courseId}/enrollments`,
+                    url: `${apiBaseUrl}/courses/${courseId}/enrollments`, // EnrollmentsController POST endpoint
                     type: "POST",
                     contentType: "application/json",
                     data: JSON.stringify(enrollData),
                     headers: { "Authorization": "Bearer " + token },
                     success: function(response, textStatus, jqXHR) {
                         $("#btnAddStudentToCourse").prop("disabled", false).text("Öğrenciyi Ekle");
-                        if (jqXHR.status === 201 && response && response.studentId) {
-                             $("#addStudentAlert").addClass("alert-success").text(`Öğrenci (ID: ${response.studentId}) başarıyla kursa eklendi! Liste güncelleniyor...`).show();
+                        if ((jqXHR.status === 201 || jqXHR.status === 200) && response && (response.status === true || response.studentId)) {
+                             $("#addStudentAlert").addClass("alert-success").text(response.message || `Öğrenci (ID: ${response.studentId}) başarıyla kursa eklendi! Liste güncelleniyor...`).show();
                             $("#studentIdentifierInput").val('');
                             loadCourseDetailsAndStudents(courseId, apiBaseUrl, token);
-                        } else if (response && response.status === true) {
-                             $("#addStudentAlert").addClass("alert-success").text(response.message || "Öğrenci başarıyla eklendi! Liste güncelleniyor...").show();
-                             $("#studentIdentifierInput").val('');
-                             loadCourseDetailsAndStudents(courseId, apiBaseUrl, token);
                         } else {
                              $("#addStudentAlert").addClass("alert-warning").text(response.message || "İşlem tamamlandı ancak yanıt beklenildiği gibi değil.").show();
                         }
                     },
                     error: function(jqXHR, textStatus, errorThrown) {
-                        $("#btnAddStudentToCourse").prop("disabled", false).text("Öğrenciyi Ekle");
+                         $("#btnAddStudentToCourse").prop("disabled", false).text("Öğrenciyi Ekle");
                         var errorMessage = "Öğrenci eklenirken bir API hatası oluştu.";
-                        // ... (daha detaylı hata mesajı oluşturma kısmı) ...
+                        // ... (detaylı hata mesajı oluşturma) ...
                         $("#addStudentAlert").addClass("alert-danger").text(errorMessage).show();
                     }
                 });
+            });
+
+            // ----- KURS DÜZENLEME MODALI İŞLEMLERİ -----
+            // "Kursu Düzenle" butonuna tıklandığında modalı mevcut bilgilerle doldur.
+            // Modalın açılması data-bs-toggle ile HTML üzerinden de yönetilebilir.
+            // Eğer data-bs-toggle butonda yoksa, burada modalı açın.
+            $("#btnOpenEditCourseModal").on("click", function() {
+                $("#editCourseAlert").hide().removeClass("alert-success alert-danger").text("");
+                if (globalCourseInfo) {
+                    $("#editCourseName").val(globalCourseInfo.name);
+                    $("#editCourseDescription").val(globalCourseInfo.description || '');
+                    // Modal'ı göstermek için (eğer buton üzerinde data-bs-toggle yoksa veya emin olmak için):
+                    var editModal = new bootstrap.Modal(document.getElementById('editCourseModal'));
+                     editModal.show();
+                } else {
+                    console.error("Düzenlenecek kurs bilgileri yüklenemedi (globalCourseInfo null).");
+                    // Kullanıcıya bir uyarı gösterilebilir.
+                }
+            });
+
+                    $("#btnSaveChangesCourse").on("click", function() {
+            // 1. Düzenlenecek kursun ID'sini globalCourseInfo'dan al
+            if (!globalCourseInfo || !globalCourseInfo.id) {
+                $("#editCourseAlert")
+                    .removeClass("alert-success") // Önceki başarı mesajlarını temizle
+                    .addClass("alert-danger")
+                    .text("Düzenlenecek kurs ID'si bulunamadı. Lütfen sayfayı yenileyin.")
+                    .show();
+                return;
+            }
+
+            // 2. Formdan güncellenmiş verileri al
+            var updatedCourseData = {
+                name: $("#editCourseName").val().trim(),
+                description: $("#editCourseDescription").val().trim()
+                // API'deki CourseUpdateDto'nuzla eşleşen alanlar olmalı
+            };
+
+            // 3. Temel client-side validasyon (Kurs adı boş olamaz)
+            if (!updatedCourseData.name) {
+                $("#editCourseAlert")
+                    .removeClass("alert-success")
+                    .addClass("alert-danger")
+                    .text("Kurs adı boş bırakılamaz.")
+                    .show();
+                return;
+            }
+
+            // 4. Butonu deaktif et ve kullanıcıyı bilgilendir
+            $("#editCourseAlert").hide(); // Önceki uyarıları gizle
+            $(this).prop("disabled", true).text("Kaydediliyor...");
+
+            // ----- EKSİK OLAN AJAX PUT İSTEĞİ -----
+            $.ajax({
+                url: `${apiBaseUrl}/courses/${globalCourseInfo.id}`, // API CoursesController UpdateCourse metodu
+                                                                       // (PUT /api/courses/{id})
+                type: "PUT",
+                contentType: "application/json",
+                data: JSON.stringify(updatedCourseData), // JavaScript nesnesini JSON string'ine çevir
+                headers: { "Authorization": "Bearer " + token }, // Token'ı $(document).ready scope'undan almalı
+                success: function(response) {
+                    $("#btnSaveChangesCourse").prop("disabled", false).text("Değişiklikleri Kaydet");
+
+                    // API'nizin ResultDto gibi bir yapı döndürdüğünü varsayıyoruz
+                    if (response && response.status === true) {
+                        $("#editCourseAlert")
+                            .removeClass("alert-danger")
+                            .addClass("alert-success")
+                            .text(response.message || "Kurs başarıyla güncellendi! Sayfa bilgileri yenileniyor...")
+                            .show();
+
+                        // Modal'ı kapat ve kurs listesini/detaylarını yenile
+                        setTimeout(function() {
+                            $('#editCourseModal').modal('hide'); // Bootstrap modalını kapat
+                            // Sayfadaki kurs bilgilerini ve öğrenci listesini yeniden yükle
+                            // courseId değişkeni $(document).ready() scope'unda tanımlı olmalı
+                            loadCourseDetailsAndStudents(globalCourseInfo.id, apiBaseUrl, token);
+                        }, 1500);
+                    } else {
+                        // API 'status: false' veya beklenmedik bir başarılı yanıt döndürdü
+                        $("#editCourseAlert")
+                            .removeClass("alert-success")
+                            .addClass("alert-danger")
+                            .text((response && response.message) || "Kurs güncellenemedi. Lütfen tekrar deneyin.")
+                            .show();
+                    }
+                },
+                error: function(jqXHR) {
+                    $("#btnSaveChangesCourse").prop("disabled", false).text("Değişiklikleri Kaydet");
+                    var errorMessage = "Kurs güncellenirken bir API hatası oluştu.";
+                    if (jqXHR.responseJSON) {
+                        if (jqXHR.responseJSON.message) {
+                            errorMessage = jqXHR.responseJSON.message;
+                        } else if (jqXHR.responseJSON.errors) { // Model validasyon hataları için
+                            var errors = [];
+                            for (var key in jqXHR.responseJSON.errors) {
+                                if (jqXHR.responseJSON.errors.hasOwnProperty(key)) {
+                                    errors.push(jqXHR.responseJSON.errors[key].join(' '));
+                                }
+                            }
+                            errorMessage = "Lütfen hataları düzeltin: " + errors.join('; ');
+                        } else if (jqXHR.responseJSON.title && jqXHR.status === 400) { // ASP.NET Core default validation error
+                            errorMessage = "Lütfen girdiğiniz bilgileri kontrol edin. (Hata: " + jqXHR.responseJSON.title + ")";
+                        }
+                    } else if (jqXHR.status === 404) {
+                        errorMessage = "Kurs güncelleme API endpoint'i bulunamadı veya kurs ID'si geçersiz.";
+                    } else if (jqXHR.status === 403) {
+                        errorMessage = "Bu işlemi yapmaya yetkiniz yok.";
+                    } else if (jqXHR.responseText) { // Diğer hatalar için genel bir metin
+                        try { var rt = JSON.parse(jqXHR.responseText); if(rt.message) errorMessage = rt.message; } catch(e){}
+                    }
+                    $("#editCourseAlert")
+                        .removeClass("alert-success")
+                        .addClass("alert-danger")
+                        .text(errorMessage)
+                        .show();
+                }
+            });
+        });
+
+            $('#editCourseModal').on('hidden.bs.modal', function () {
+                $("#editCourseForm")[0].reset();
+                $("#editCourseAlert").hide().removeClass("alert-success alert-danger").text("");
             });
         });
     </script>

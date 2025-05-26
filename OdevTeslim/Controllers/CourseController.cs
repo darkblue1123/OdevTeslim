@@ -15,11 +15,11 @@ using System.Threading.Tasks;
 
 namespace OdevTeslim.Controllers
 {
-    // API Projesi - CoursesController.cs
+    
     [Route("api/[controller]")]
     [ApiController]
     [Authorize]
-    public class CoursesController : ControllerBase // ControllerBase'den miras alır
+    public class CoursesController : ControllerBase 
     {
         private readonly ICourseRepository _courseRepository;
         private readonly AppDbContext _context;
@@ -35,11 +35,7 @@ namespace OdevTeslim.Controllers
             _userManager = userManager;
         }
 
-        // Mevcut GET api/courses ve GET api/courses/{id} metotlarınız doğru.
-        // POST, PUT, DELETE metotlarınız da API konseptine uygun.
-        // ... (GetCourses, GetCourse, CreateCourse, UpdateCourse, DeleteCourse metotlarınız burada kalacak) ...
-
-        // GET: api/courses
+        
         /// <summary>
         /// Tüm dersleri listeler. (Admin, Öğretmen, Öğrenci erişebilir)
         /// </summary>
@@ -49,13 +45,10 @@ namespace OdevTeslim.Controllers
         {
             var courses = await _courseRepository.GetAllAsync();
 
-            // Manuel Mapping (Entity -> DTO) - AutoMapper ile daha kolay olur
             var courseDtos = new List<CourseDto>();
             foreach (var course in courses)
             {
-                // Öğretmen ismini almak için ek sorgu veya Repository'de Include gerekli
-                // Şimdilik TeacherId'yi döndürelim. İsim eklemek isterseniz repository metodunu güncellemelisiniz.
-                var teacher = await _context.Users.FindAsync(course.TeacherId); // Öğretmeni ID ile bul
+                var teacher = await _context.Users.FindAsync(course.TeacherId); 
 
                 courseDtos.Add(new CourseDto
                 {
@@ -63,7 +56,7 @@ namespace OdevTeslim.Controllers
                     Name = course.Name,
                     Description = course.Description,
                     TeacherId = course.TeacherId,
-                    TeacherName = teacher?.UserName // Öğretmen bulunduysa adını ata, bulunamadıysa null kalır
+                    TeacherName = teacher?.UserName
                 });
             }
             return Ok(courseDtos);
@@ -77,7 +70,6 @@ namespace OdevTeslim.Controllers
         [Authorize(Roles = "Admin,Teacher,Student")]
         public async Task<ActionResult<CourseDto>> GetCourse(int id)
         {
-            // Öğretmen bilgisini de almak için özel repository metodunu kullanalım
             var course = await _courseRepository.GetCourseWithTeacherAsync(id);
 
             if (course == null)
@@ -85,7 +77,6 @@ namespace OdevTeslim.Controllers
                 return NotFound(new ResultDto { Status = false, Message = "Kurs bulunamadı." });
             }
 
-            // Manuel Mapping
             var courseDto = new CourseDto
             {
                 Id = course.Id,
@@ -115,41 +106,35 @@ namespace OdevTeslim.Controllers
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (userId == null)
             {
-                // Bu durum normalde [Authorize] nedeniyle oluşmaz ama kontrol eklemek iyidir.
+               
                 return Unauthorized(new ResultDto { Status = false, Message = "Kullanıcı kimliği bulunamadı." });
             }
 
-            // Giriş yapan kullanıcının Teacher rolünde olduğundan emin ol (Admin de olabilir)
-            // Veya direkt TeacherId olarak bu ID'yi kullan.
+          
             var loggedInUser = await _userManager.FindByIdAsync(userId);
             if (loggedInUser == null)
             {
                 return Unauthorized(new ResultDto { Status = false, Message = "Kullanıcı bulunamadı." });
             }
-            // Eğer sadece Öğretmenler ders oluşturabilsin istiyorsak ve Admin'ler değilse:
-            // if (!await _userManager.IsInRoleAsync(loggedInUser, "Teacher"))
-            // {
-            //     return Forbid(); // Yetkisi yok (403 Forbidden)
-            // }
-
+           
 
             // Manuel Mapping (DTO -> Entity)
             var newCourse = new Course
             {
                 Name = courseCreateDto.Name,
                 Description = courseCreateDto.Description,
-                TeacherId = userId, // Dersi oluşturan öğretmenin ID'si
-                CreatedDate = DateTime.UtcNow // BaseEntity'de otomatik atanıyor olabilir, kontrol edin.
+                TeacherId = userId, 
+                CreatedDate = DateTime.UtcNow 
             };
 
             await _courseRepository.AddAsync(newCourse);
             try
             {
-                await _context.SaveChangesAsync(); // Değişiklikleri kaydet
+                await _context.SaveChangesAsync(); 
             }
             catch (DbUpdateException ex)
             {
-                // Veritabanı kaydetme hatası (loglama yapılabilir)
+               
                 return StatusCode(StatusCodes.Status500InternalServerError, new ResultDto { Status = false, Message = "Ders kaydedilirken bir hata oluştu." + ex.Message });
             }
 
@@ -180,31 +165,27 @@ namespace OdevTeslim.Controllers
                 return BadRequest(ModelState);
             }
 
-            var courseToUpdate = await _courseRepository.GetByIdAsync(id); // Önce varlığı al
+            var courseToUpdate = await _courseRepository.GetByIdAsync(id); 
 
             if (courseToUpdate == null)
             {
                 return NotFound(new ResultDto { Status = false, Message = "Güncellenecek kurs bulunamadı." });
             }
 
-            // Yetki Kontrolü: Admin değilse, sadece kendi dersini güncelleyebilir
+          
             var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             bool isAdmin = User.IsInRole("Admin");
 
             if (!isAdmin && courseToUpdate.TeacherId != currentUserId)
             {
-                // Kullanıcı Admin değil VE dersin sahibi de değilse -> Yetkisi yok
+               
                 return Forbid(); // 403 Forbidden
             }
 
-            // Manuel Mapping (DTO -> Entity)
+            
             courseToUpdate.Name = courseUpdateDto.Name;
             courseToUpdate.Description = courseUpdateDto.Description;
-            // ModifiedDate BaseEntity'de otomatik güncelleniyor olabilir, kontrol edin.
-            // Veya burada manuel olarak ayarlayın: courseToUpdate.ModifiedDate = DateTime.UtcNow;
-
-            // EF Core zaten varlığı takip ettiği için Update metodunu çağırmak yeterli
-            // _courseRepository.Update(courseToUpdate); // GenericRepository bunu yapıyor
+            
 
             try
             {
@@ -231,7 +212,7 @@ namespace OdevTeslim.Controllers
         /// Bir dersi siler. (Sadece Admin erişebilir - örnek senaryo)
         /// </summary>
         [HttpDelete("{id}")]
-        [Authorize(Roles = "Admin")] // Sadece Admin silebilir
+        [Authorize(Roles = "Admin")] 
         public async Task<IActionResult> DeleteCourse(int id)
         {
             var courseToDelete = await _courseRepository.GetByIdAsync(id);
@@ -241,18 +222,17 @@ namespace OdevTeslim.Controllers
                 return NotFound(new ResultDto { Status = false, Message = "Silinecek kurs bulunamadı." });
             }
 
-            // Yetki kontrolü zaten [Authorize(Roles="Admin")] ile yapıldı ama ek kontrol eklenebilir.
+           
 
             _courseRepository.Delete(courseToDelete);
 
             try
             {
-                await _context.SaveChangesAsync(); // Değişiklikleri kaydet
+                await _context.SaveChangesAsync(); 
             }
-            catch (DbUpdateException ex) // İlişkili kayıtlar varsa (ödevler, kayıtlar) ve silme kısıtlanmışsa hata verebilir
+            catch (DbUpdateException ex)
             {
-                // Loglama yapılabilir
-                // İlişkili kayıtları da silmek veya silme işlemini engellemek gerekebilir (veritabanı tasarımı/cascade delete ayarlarına bağlı)
+                
                 return StatusCode(StatusCodes.Status500InternalServerError, new ResultDto { Status = false, Message = "Kurs silinirken bir veritabanı hatası oluştu. İlişkili kayıtlar olabilir." + ex.Message });
             }
 
@@ -263,19 +243,18 @@ namespace OdevTeslim.Controllers
         }
 
 
-        [HttpGet("{courseId}/details-and-students")] // Yeni endpoint rotası
-        [Authorize(Roles = "Admin,Teacher,Student")] // Yetkilendirmeyi uygun şekilde ayarlayın
+        [HttpGet("{courseId}/details-and-students")] 
+        [Authorize(Roles = "Admin,Teacher,Student")] 
         public async Task<IActionResult> GetCourseDetailsAndStudents(int courseId)
         {
-            // 1. Kurs Bilgilerini Çek
-            // Repository'nizdeki GetCourseWithTeacherAsync metodu öğretmen bilgisini de getiriyordu.
+            
             var courseEntity = await _courseRepository.GetCourseWithTeacherAsync(courseId);
             if (courseEntity == null)
             {
                 return NotFound(new { success = false, message = $"Kurs (ID: {courseId}) bulunamadı." });
             }
 
-            // Kurs bilgilerini anonim bir nesneye veya sunucu tarafı bir DTO'ya map'leyin
+          
             var courseData = new
             {
                 id = courseEntity.Id,
@@ -286,24 +265,23 @@ namespace OdevTeslim.Controllers
             };
 
 
-            // 2. Kayıtlı Öğrencileri Çek
-            // Bu kısım, API controller'ınıza daha önce eklediğimiz GetEnrolledStudents metodundaki mantığa benzer olacak.
+            
             var studentEntities = await _context.Enrollments
                 .Where(ce => ce.CourseId == courseId)
-                .Include(ce => ce.Student) // Student (AppUser) bilgilerini de çek
+                .Include(ce => ce.Student) 
                 .Select(ce => ce.Student)
                 .ToListAsync();
 
-            // Öğrenci bilgilerini anonim nesnelere veya sunucu tarafı DTO'lara map'leyin
+            
             var studentsData = studentEntities.Select(s => new
             {
                 id = s.Id,
-                fullName = $"{s.FirstName} {s.LastName}", // AppUser modelinizdeki alanlara göre
+                fullName = $"{s.FirstName} {s.LastName}", 
                 email = s.Email
-                // İhtiyaç duyduğunuz diğer öğrenci alanları
+                
             }).ToList();
 
-            // 3. Tüm veriyi tek bir nesnede birleştirip döndür
+            
             var result = new
             {
                 success = true,
@@ -318,16 +296,9 @@ namespace OdevTeslim.Controllers
         [Authorize(Roles = "Admin,Teacher,Student")]
         public async Task<IActionResult> GetCourseAssignmentsWithDetails(int courseId)
         {
-            // 1. Kurs Temel Bilgilerini Çek
-            // Course entity'nizin TeacherId alanını içerdiğinden emin olun.
-            // Eğer TeacherId bir navigation property ise ve yüklenmiyorsa, Include etmeniz gerekebilir
-            // ya da Course entity'nizde doğrudan bir TeacherId foreign key alanı olmalıdır.
-            var courseEntity = await _context.Courses // Veya _courseRepository.GetByIdAsync(courseId);
-                                                      // Eğer _courseRepository.GetByIdAsync(courseId) TeacherId'yi getirmiyorsa
-                                                      // ve TeacherId, Course entity'sinde direkt bir property ise, _context üzerinden çekmek
-                                                      // veya repository metodunu güncellemek daha iyi olabilir.
-                                                      // Örneğin, eğer Course entity'sinde public string TeacherId { get; set; } varsa:
-                .AsNoTracking() // Sadece okuma yapıyorsak performansı artırır
+            
+            var courseEntity = await _context.Courses 
+                .AsNoTracking() 
                 .FirstOrDefaultAsync(c => c.Id == courseId);
 
             if (courseEntity == null)
@@ -335,15 +306,15 @@ namespace OdevTeslim.Controllers
                 return NotFound(new { success = false, message = $"Kurs (ID: {courseId}) bulunamadı." });
             }
 
-            // courseData oluşturulurken teacherId'nin eklendiğinden emin olun
+            
             var courseData = new
             {
                 id = courseEntity.Id,
                 name = courseEntity.Name,
-                teacherId = courseEntity.TeacherId // <-- BU ÇOK ÖNEMLİ! courseEntity.TeacherId dolu olmalı.
+                teacherId = courseEntity.TeacherId 
             };
 
-            // 2. Kursa Atanmış Ödevleri Çek
+           
             var mappedAssignments = await _context.Assignments
                 .Where(a => a.CourseId == courseId)
                 .OrderBy(a => a.DueDate)
@@ -361,8 +332,8 @@ namespace OdevTeslim.Controllers
             {
                 success = true,
                 courseInfo = courseData,
-                // DÜZELTİLMİŞ SATIR:
-                assignments = mappedAssignments // ToListAsync() zaten null olmayan bir liste döndürür (boş olabilir)
+                
+                assignments = mappedAssignments 
             };
 
 
@@ -370,6 +341,42 @@ namespace OdevTeslim.Controllers
             return Ok(result);
         }
 
+
+        [HttpGet("my")] 
+        [Authorize(Roles = "Uye")] 
+        public async Task<ActionResult<IEnumerable<CourseDto>>> GetMyEnrolledCourses()
+        {
+            var studentId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(studentId))
+            {
+                return Unauthorized(new ResultDto { Status = false, Message = "Kullanıcı kimliği bulunamadı." });
+            }
+
+            var enrolledCourses = await _context.Enrollments
+                .Where(ce => ce.StudentId == studentId)
+                .Include(ce => ce.Course) 
+                    .ThenInclude(c => c.Teacher) 
+                .Select(ce => ce.Course) 
+                .ToListAsync();
+
+            if (enrolledCourses == null || !enrolledCourses.Any())
+            {
+                return Ok(new List<CourseDto>()); 
+            }
+
+            // Kursları CourseDto'ya map'le
+            var courseDtos = enrolledCourses.Select(course => new CourseDto
+            {
+                Id = course.Id,
+                Name = course.Name,
+                Description = course.Description,
+                TeacherId = course.TeacherId,
+                TeacherName = course.Teacher != null ? $"{course.Teacher.FirstName} {course.Teacher.LastName}" : "Belirtilmemiş"
+                
+            }).ToList();
+
+            return Ok(courseDtos);
+        }
 
     }
 }

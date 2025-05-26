@@ -13,8 +13,22 @@ namespace OdevTeslimUI.Controllers
 
         public IActionResult Index()
         {
-            ViewBag.ApiBaseURL = _apiBaseUrl; // JavaScript'in API adresini bilmesi için
+            ViewBag.ApiBaseURL = _apiBaseUrl; 
             return View();
         }
+        [HttpGet]
+        public IActionResult Register()
+        {
+            ViewBag.ApiBaseURL = _apiBaseUrl; 
+            return View(); 
+        }
+        [HttpGet]
+        public IActionResult Login()
+        {
+            ViewBag.ApiBaseURL = _apiBaseUrl;
+            return View();
+        }
+
+
     }
 }
